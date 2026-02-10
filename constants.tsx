@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Wallet as WalletIcon, TrendingUp, CreditCard, Banknote, PieChart, Landmark,
   ShoppingCart, Home, Zap, Film, Activity, Plane, Package, Users, Megaphone, Cpu, 
   Building2, Scale, HelpCircle, Briefcase, Laptop, Gift, Tag, Handshake, 
-  MessageSquare, Award, CircleDollarSign, SmartphoneNfc
+  MessageSquare, Award, CircleDollarSign, SmartphoneNfc, Settings as SettingsIcon
 } from 'lucide-react';
 import { View } from './types';
 
@@ -17,6 +17,7 @@ export const NAVIGATION_ITEMS = [
   { id: View.Budgeting, name: 'Budgets', icon: <PieChart size={20} /> },
   { id: View.Liabilities, name: 'Debt', icon: <CreditCard size={20} /> },
   { id: View.Investments, name: 'Invest', icon: <TrendingUp size={20} /> },
+  { id: View.Settings, name: 'Settings', icon: <SettingsIcon size={20} /> },
 ];
 
 export const BANK_OPTIONS = ['HDFC BANK', 'SBI BANK', 'AXIS BANK', 'ICICI BANK', 'Other Bank'];

@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { Transaction, ExpenseCategory, BankAccount, Wallet } from '../types';
 import { formatCurrency } from '../utils/calculations';
-import { Plus, Trash2, Banknote, Edit2, XCircle, TrendingUp, Filter } from 'lucide-react';
+import { Plus, Trash2, Banknote, Edit2, XCircle, TrendingUp, Filter, Settings, Save, Check, X } from 'lucide-react';
 import { getCategoryIcon } from '../constants';
 import ConfirmModal from './ConfirmModal';
 
@@ -14,18 +14,33 @@ interface IncomeTrackerProps {
   onAdd: (t: Transaction) => void;
   onUpdate: (t: Transaction) => void;
   onDelete: (id: string) => void;
+  onAddCategory: (cat: ExpenseCategory, sub: string) => void;
+  onUpdateCategory: (cat: ExpenseCategory, oldSub: string, newSub: string) => void;
+  onDeleteCategory: (cat: ExpenseCategory, sub: string) => void;
 }
 
-const IncomeTracker: React.FC<IncomeTrackerProps> = ({ transactions, accounts, wallets, categories, onAdd, onUpdate, onDelete }) => {
+const IncomeTracker: React.FC<IncomeTrackerProps> = ({ 
+  transactions, 
+  accounts, 
+  wallets, 
+  categories, 
+  onAdd, 
+  onUpdate, 
+  onDelete,
+  onAddCategory,
+  onUpdateCategory,
+  onDeleteCategory
+}) => {
   const [activeTab, setActiveTab] = useState<ExpenseCategory>('Personal');
   const [sourceFilter, setSourceFilter] = useState<string>('all');
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showCategoryManager, setShowCategoryManager] = useState(false);
   const [idToDelete, setIdToDelete] = useState<string | null>(null);
   const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
 
   const [formData, setFormData] = useState({
     amount: '',
-    subCategory: categories['Personal'][0],
+    subCategory: categories[activeTab]?.[0] || 'Other',
     description: '',
     date: new Date().toISOString().split('T')[0],
     sourceId: accounts[0]?.id || wallets[0]?.id || ''
@@ -44,6 +59,13 @@ const IncomeTracker: React.FC<IncomeTrackerProps> = ({ transactions, accounts, w
       setShowAddForm(true);
     }
   }, [editingTransaction]);
+
+  // Update formData's subCategory if tab changes and current subCategory isn't in new list
+  useEffect(() => {
+    if (!categories[activeTab]?.includes(formData.subCategory)) {
+        setFormData(prev => ({ ...prev, subCategory: categories[activeTab]?.[0] || 'Other' }));
+    }
+  }, [activeTab, categories]);
 
   const filteredTransactions = useMemo(() => {
     return transactions
@@ -80,7 +102,7 @@ const IncomeTracker: React.FC<IncomeTrackerProps> = ({ transactions, accounts, w
   const resetForm = () => {
     setFormData({
       amount: '',
-      subCategory: categories[activeTab][0],
+      subCategory: categories[activeTab]?.[0] || 'Other',
       description: '',
       date: new Date().toISOString().split('T')[0],
       sourceId: accounts[0]?.id || wallets[0]?.id || ''
@@ -98,6 +120,16 @@ const IncomeTracker: React.FC<IncomeTrackerProps> = ({ transactions, accounts, w
         message="This will remove the entry and deduct the amount from your account balance."
       />
 
+      <CategoryManagerModal 
+        isOpen={showCategoryManager} 
+        onClose={() => setShowCategoryManager(false)}
+        activeTab={activeTab}
+        categories={categories[activeTab] || []}
+        onAdd={(sub) => onAddCategory(activeTab, sub)}
+        onUpdate={(oldSub, newSub) => onUpdateCategory(activeTab, oldSub, newSub)}
+        onDelete={(sub) => onDeleteCategory(activeTab, sub)}
+      />
+
       <div className="flex bg-slate-200/50 dark:bg-slate-900 p-1.5 rounded-2xl w-full">
         {(['Personal', 'Business'] as ExpenseCategory[]).map(cat => (
           <button
@@ -112,14 +144,25 @@ const IncomeTracker: React.FC<IncomeTrackerProps> = ({ transactions, accounts, w
         ))}
       </div>
 
-      {!showAddForm && (
-        <button 
-          onClick={() => setShowAddForm(true)}
-          className="w-full bg-emerald-600 text-white p-5 rounded-[2rem] font-black uppercase tracking-widest flex items-center justify-center gap-3 shadow-xl shadow-emerald-500/20 active:scale-95 transition-all"
-        >
-          <Plus size={24} /> New Income Entry
-        </button>
-      )}
+      <div className="flex gap-3">
+        {!showAddForm && (
+          <button 
+            onClick={() => setShowAddForm(true)}
+            className="flex-1 bg-emerald-600 text-white p-5 rounded-[2rem] font-black uppercase tracking-widest flex items-center justify-center gap-3 shadow-xl shadow-emerald-500/20 active:scale-95 transition-all"
+          >
+            <Plus size={24} /> New Income Entry
+          </button>
+        )}
+        {!showAddForm && (
+          <button 
+            onClick={() => setShowCategoryManager(true)}
+            className="p-5 bg-slate-900 dark:bg-slate-800 text-white rounded-[2rem] shadow-xl hover:bg-slate-800 transition-all flex items-center justify-center"
+            title="Manage Categories"
+          >
+            <Settings size={24} />
+          </button>
+        )}
+      </div>
 
       {showAddForm && (
         <div className="bg-white dark:bg-slate-900 p-6 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-xl animate-in zoom-in-95">
@@ -182,15 +225,24 @@ const IncomeTracker: React.FC<IncomeTrackerProps> = ({ transactions, accounts, w
               </select>
             </div>
 
-            <div>
+            <div className="relative">
               <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-2">Source Category</label>
-              <select
-                value={formData.subCategory}
-                onChange={e => setFormData({ ...formData, subCategory: e.target.value })}
-                className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-5 py-4 text-sm font-bold dark:text-white appearance-none"
-              >
-                {categories[activeTab].map(cat => <option key={cat} value={cat}>{cat}</option>)}
-              </select>
+              <div className="flex gap-2">
+                <select
+                    value={formData.subCategory}
+                    onChange={e => setFormData({ ...formData, subCategory: e.target.value })}
+                    className="flex-1 bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-5 py-4 text-sm font-bold dark:text-white appearance-none transition-all"
+                >
+                    {categories[activeTab].map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                </select>
+                <button 
+                  type="button" 
+                  onClick={() => setShowCategoryManager(true)}
+                  className="p-4 bg-slate-200 dark:bg-slate-700 rounded-2xl hover:bg-slate-300 dark:hover:bg-slate-600 transition-all text-slate-600 dark:text-slate-300"
+                >
+                  <Settings size={20} />
+                </button>
+              </div>
             </div>
 
             <button type="submit" className="w-full bg-slate-900 dark:bg-emerald-600 text-white py-5 rounded-[1.5rem] font-black uppercase tracking-widest shadow-xl active:scale-95 transition-all">
@@ -256,6 +308,109 @@ const IncomeTracker: React.FC<IncomeTrackerProps> = ({ transactions, accounts, w
             </div>
           ))
         )}
+      </div>
+    </div>
+  );
+};
+
+interface CategoryManagerModalProps {
+  isOpen: boolean;
+  onClose: () => void;
+  activeTab: ExpenseCategory;
+  categories: string[];
+  onAdd: (sub: string) => void;
+  onUpdate: (oldSub: string, newSub: string) => void;
+  onDelete: (sub: string) => void;
+}
+
+const CategoryManagerModal: React.FC<CategoryManagerModalProps> = ({ isOpen, onClose, activeTab, categories, onAdd, onUpdate, onDelete }) => {
+  const [newCat, setNewCat] = useState('');
+  const [editingIndex, setEditingIndex] = useState<number | null>(null);
+  const [editingVal, setEditingVal] = useState('');
+
+  if (!isOpen) return null;
+
+  const handleAdd = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCat.trim()) return;
+    onAdd(newCat.trim());
+    setNewCat('');
+  };
+
+  const startEdit = (index: number, val: string) => {
+    setEditingIndex(index);
+    setEditingVal(val);
+  };
+
+  const handleUpdate = (oldVal: string) => {
+    if (!editingVal.trim() || editingVal.trim() === oldVal) {
+      setEditingIndex(null);
+      return;
+    }
+    onUpdate(oldVal, editingVal.trim());
+    setEditingIndex(null);
+  };
+
+  return (
+    <div className="fixed inset-0 z-[110] flex items-center justify-center p-4">
+      <div className="absolute inset-0 bg-slate-900/60 backdrop-blur-sm" onClick={onClose} />
+      <div className="relative bg-white dark:bg-slate-900 w-full max-w-md rounded-[2.5rem] shadow-2xl border border-slate-100 dark:border-slate-800 p-8 overflow-hidden animate-in zoom-in-95 duration-200 flex flex-col max-h-[80vh]">
+        <div className="flex justify-between items-center mb-6">
+          <h3 className="text-xl font-black uppercase tracking-tight text-slate-900 dark:text-white">
+            Manage {activeTab} Income Sources
+          </h3>
+          <button onClick={onClose} className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-white"><X size={24} /></button>
+        </div>
+
+        <form onSubmit={handleAdd} className="flex gap-2 mb-6">
+          <input 
+            type="text" 
+            placeholder="New Source Name" 
+            value={newCat} 
+            onChange={e => setNewCat(e.target.value)}
+            className="flex-1 bg-slate-50 dark:bg-slate-800 border-none rounded-xl px-4 py-3 text-sm font-bold dark:text-white focus:ring-2 ring-emerald-500"
+          />
+          <button type="submit" className="p-3 bg-emerald-600 text-white rounded-xl shadow-lg hover:bg-emerald-700 transition-all">
+            <Plus size={20} />
+          </button>
+        </form>
+
+        <div className="flex-1 overflow-y-auto pr-2 space-y-2 no-scrollbar">
+          {categories.map((cat, idx) => (
+            <div key={cat} className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-xl flex items-center justify-between group">
+              {editingIndex === idx ? (
+                <div className="flex-1 flex gap-2">
+                  <input 
+                    autoFocus
+                    type="text" 
+                    value={editingVal} 
+                    onChange={e => setEditingVal(e.target.value)}
+                    className="flex-1 bg-white dark:bg-slate-700 border-none rounded-lg px-2 py-1 text-sm font-bold dark:text-white"
+                  />
+                  <button onClick={() => handleUpdate(cat)} className="text-emerald-500"><Check size={18} /></button>
+                  <button onClick={() => setEditingIndex(null)} className="text-slate-400"><X size={18} /></button>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center gap-3">
+                    <div className="w-8 h-8 bg-white dark:bg-slate-800 rounded-lg flex items-center justify-center text-emerald-500">
+                      {getCategoryIcon(cat)}
+                    </div>
+                    <span className="text-sm font-bold text-slate-700 dark:text-slate-200">{cat}</span>
+                  </div>
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button onClick={() => startEdit(idx, cat)} className="p-1.5 text-slate-400 hover:text-blue-500"><Edit2 size={16} /></button>
+                    <button onClick={() => onDelete(cat)} className="p-1.5 text-slate-400 hover:text-rose-500"><Trash2 size={16} /></button>
+                  </div>
+                </>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <div className="mt-6 pt-4 border-t border-slate-100 dark:border-slate-800 text-[10px] font-black uppercase tracking-widest text-slate-400 text-center">
+          Tap icon to edit or delete
+        </div>
       </div>
     </div>
   );

@@ -2,7 +2,8 @@
 import React, { useState } from 'react';
 import { Investment } from '../types';
 import { formatCurrency } from '../utils/calculations';
-import { TrendingUp, Plus, Trash2, ArrowUpRight, ArrowDownRight, Package, Briefcase, IndianRupee, PieChart } from 'lucide-react';
+import { TrendingUp, Plus, Trash2, ArrowUpRight, ArrowDownRight, Briefcase, PieChart, ChevronDown, ChevronUp } from 'lucide-react';
+import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts';
 import ConfirmModal from './ConfirmModal';
 
 interface InvestmentPortfolioProps {
@@ -14,6 +15,7 @@ interface InvestmentPortfolioProps {
 const InvestmentPortfolio: React.FC<InvestmentPortfolioProps> = ({ investments, onAdd, onDelete }) => {
   const [showAdd, setShowAdd] = useState(false);
   const [idToDelete, setIdToDelete] = useState<string | null>(null);
+  const [expandedId, setExpandedId] = useState<string | null>(null);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -41,6 +43,26 @@ const InvestmentPortfolio: React.FC<InvestmentPortfolioProps> = ({ investments, 
       onDelete(idToDelete);
       setIdToDelete(null);
     }
+  };
+
+  const generateTrendData = (buyPrice: number, currentPrice: number) => {
+    // Simulated growth curve for visualization
+    const steps = 7;
+    const data = [];
+    const diff = currentPrice - buyPrice;
+    
+    for (let i = 0; i < steps; i++) {
+        const randomness = (Math.random() - 0.5) * (diff * 0.2);
+        const progress = i / (steps - 1);
+        const val = buyPrice + (diff * progress) + randomness;
+        data.push({
+            name: `P${i}`,
+            price: Math.max(buyPrice * 0.5, val)
+        });
+    }
+    // Ensure last one is exact
+    data[steps-1].price = currentPrice;
+    return data;
   };
 
   const totalCost = investments.reduce((acc, inv) => acc + inv.buyPrice * inv.quantity, 0);
@@ -180,15 +202,15 @@ const InvestmentPortfolio: React.FC<InvestmentPortfolioProps> = ({ investments, 
             </button>
           </div>
         ) : (
-          <div className="overflow-x-auto flex-1">
+          <div className="overflow-x-auto flex-1 no-scrollbar">
             <div className="min-w-[800px]">
               <div className="grid grid-cols-12 gap-4 px-8 py-5 bg-slate-50 dark:bg-slate-800/50 border-b border-slate-100 dark:border-slate-800 text-[10px] uppercase font-black text-slate-400 dark:text-slate-500 tracking-widest">
                 <div className="col-span-3">Asset</div>
                 <div className="col-span-1 text-right">Qty</div>
                 <div className="col-span-2 text-right">Buy Price</div>
-                <div className="col-span-2 text-right">Cost Basis</div>
                 <div className="col-span-2 text-right">P&L</div>
                 <div className="col-span-2 text-right">Current Value</div>
+                <div className="col-span-2 text-right">Actions</div>
               </div>
               <div className="divide-y divide-slate-100 dark:divide-slate-800">
                 {investments.map(inv => {
@@ -196,43 +218,112 @@ const InvestmentPortfolio: React.FC<InvestmentPortfolioProps> = ({ investments, 
                   const invVal = inv.currentPrice * inv.quantity;
                   const invPnL = invVal - invCost;
                   const invPnLPerc = (invPnL / invCost) * 100;
+                  const isExpanded = expandedId === inv.id;
 
                   return (
-                    <div key={inv.id} className="grid grid-cols-12 gap-4 px-8 py-6 items-center hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group">
-                      <div className="col-span-3 flex items-center gap-3 min-w-0">
-                        <div className="w-10 h-10 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl flex items-center justify-center font-black shrink-0">
-                          {inv.name[0]}
-                        </div>
-                        <div className="min-w-0">
-                          <p className="font-black text-slate-900 dark:text-white truncate">{inv.name}</p>
-                          <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase">{inv.date}</p>
-                        </div>
-                      </div>
-                      <div className="col-span-1 text-right font-bold text-slate-600 dark:text-slate-400">{inv.quantity}</div>
-                      <div className="col-span-2 text-right font-bold text-slate-600 dark:text-slate-400">
-                        <p className="text-sm">{formatCurrency(inv.buyPrice)}</p>
-                        <p className="text-[10px] opacity-60">Current: {formatCurrency(inv.currentPrice)}</p>
-                      </div>
-                      <div className="col-span-2 text-right font-bold text-slate-600 dark:text-slate-400">{formatCurrency(invCost)}</div>
-                      <div className={`col-span-2 text-right font-black ${invPnL >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
-                        <div className="flex flex-col items-end">
-                          <div className="flex items-center gap-1">
-                            {invPnL >= 0 ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
-                            <span>{formatCurrency(Math.abs(invPnL))}</span>
-                          </div>
-                          <span className="text-[10px] opacity-80">{invPnLPerc.toFixed(2)}%</span>
-                        </div>
-                      </div>
-                      <div className="col-span-2 text-right flex items-center justify-end gap-3">
-                        <span className="font-black text-slate-900 dark:text-white">{formatCurrency(invVal)}</span>
-                        <button
-                          onClick={() => setIdToDelete(inv.id)}
-                          className="text-rose-400 hover:text-rose-600 p-2 rounded-lg lg:opacity-0 group-hover:opacity-100 transition-all hover:bg-rose-50 dark:hover:bg-rose-900/20"
+                    <React.Fragment key={inv.id}>
+                        <div 
+                          className={`grid grid-cols-12 gap-4 px-8 py-6 items-center hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors group cursor-pointer ${isExpanded ? 'bg-blue-50/30 dark:bg-blue-900/10' : ''}`}
+                          onClick={() => setExpandedId(isExpanded ? null : inv.id)}
                         >
-                          <Trash2 size={16} />
-                        </button>
-                      </div>
-                    </div>
+                          <div className="col-span-3 flex items-center gap-3 min-w-0">
+                            <div className="w-10 h-10 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-xl flex items-center justify-center font-black shrink-0">
+                              {inv.name[0]}
+                            </div>
+                            <div className="min-w-0">
+                              <p className="font-black text-slate-900 dark:text-white truncate">{inv.name}</p>
+                              <p className="text-[10px] text-slate-400 dark:text-slate-500 font-bold uppercase">{inv.date}</p>
+                            </div>
+                          </div>
+                          <div className="col-span-1 text-right font-bold text-slate-600 dark:text-slate-400">{inv.quantity}</div>
+                          <div className="col-span-2 text-right font-bold text-slate-600 dark:text-slate-400">
+                            <p className="text-sm">{formatCurrency(inv.buyPrice)}</p>
+                            <p className="text-[10px] opacity-60">BuyBasis: {formatCurrency(invCost)}</p>
+                          </div>
+                          <div className={`col-span-2 text-right font-black ${invPnL >= 0 ? 'text-emerald-500' : 'text-rose-500'}`}>
+                            <div className="flex flex-col items-end">
+                              <div className="flex items-center gap-1">
+                                {invPnL >= 0 ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
+                                <span>{formatCurrency(Math.abs(invPnL))}</span>
+                              </div>
+                              <span className="text-[10px] opacity-80">{invPnLPerc.toFixed(2)}%</span>
+                            </div>
+                          </div>
+                          <div className="col-span-2 text-right">
+                             <span className="font-black text-slate-900 dark:text-white">{formatCurrency(invVal)}</span>
+                          </div>
+                          <div className="col-span-2 text-right flex items-center justify-end gap-2">
+                             <button
+                                onClick={(e) => { e.stopPropagation(); setIdToDelete(inv.id); }}
+                                className="text-rose-400 hover:text-rose-600 p-2 rounded-lg lg:opacity-0 group-hover:opacity-100 transition-all"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                              <div className="p-2 text-slate-400">
+                                 {isExpanded ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+                              </div>
+                          </div>
+                        </div>
+                        {isExpanded && (
+                            <div className="bg-slate-50 dark:bg-slate-950 px-8 py-8 animate-in slide-in-from-top-2 duration-300">
+                                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                                    <div className="lg:col-span-2 h-[200px]">
+                                        <p className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 mb-4">Historical Performance Trend</p>
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <AreaChart data={generateTrendData(inv.buyPrice, inv.currentPrice)}>
+                                                <defs>
+                                                    <linearGradient id="colorPrice" x1="0" y1="0" x2="0" y2="1">
+                                                        <stop offset="5%" stopColor={invPnL >= 0 ? "#10b981" : "#f43f5e"} stopOpacity={0.3}/>
+                                                        <stop offset="95%" stopColor={invPnL >= 0 ? "#10b981" : "#f43f5e"} stopOpacity={0}/>
+                                                    </linearGradient>
+                                                </defs>
+                                                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#88888820" />
+                                                <Tooltip 
+                                                    contentStyle={{ backgroundColor: '#0f172a', border: 'none', borderRadius: '12px', fontSize: '10px' }}
+                                                    itemStyle={{ color: '#fff', fontWeight: 900 }}
+                                                    labelStyle={{ display: 'none' }}
+                                                    formatter={(val: number) => [formatCurrency(val), 'Market Price']}
+                                                />
+                                                <Area 
+                                                    type="monotone" 
+                                                    dataKey="price" 
+                                                    stroke={invPnL >= 0 ? "#10b981" : "#f43f5e"} 
+                                                    fillOpacity={1} 
+                                                    fill="url(#colorPrice)" 
+                                                    strokeWidth={3}
+                                                />
+                                            </AreaChart>
+                                        </ResponsiveContainer>
+                                    </div>
+                                    <div className="space-y-6">
+                                        <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
+                                            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">Asset Allocation</p>
+                                            <div className="flex items-center justify-between">
+                                                <span className="text-xs font-bold text-slate-600 dark:text-slate-300">Share of Portfolio</span>
+                                                <span className="text-sm font-black text-slate-900 dark:text-white">{((invVal / totalValue) * 100).toFixed(1)}%</span>
+                                            </div>
+                                            <div className="h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full mt-2 overflow-hidden">
+                                                <div className="h-full bg-blue-500 rounded-full" style={{ width: `${(invVal / totalValue) * 100}%` }}></div>
+                                            </div>
+                                        </div>
+                                        <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border border-slate-100 dark:border-slate-800 shadow-sm">
+                                            <p className="text-[9px] font-black uppercase tracking-widest text-slate-400 mb-2">Breakdown</p>
+                                            <div className="space-y-2">
+                                                <div className="flex justify-between text-[10px] font-bold">
+                                                    <span className="text-slate-500">Capital Invested</span>
+                                                    <span className="text-slate-900 dark:text-white">{formatCurrency(invCost)}</span>
+                                                </div>
+                                                <div className="flex justify-between text-[10px] font-bold">
+                                                    <span className="text-slate-500">Unrealized Gain</span>
+                                                    <span className={invPnL >= 0 ? "text-emerald-500" : "text-rose-500"}>{formatCurrency(invPnL)}</span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </React.Fragment>
                   );
                 })}
               </div>

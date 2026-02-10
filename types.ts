@@ -8,6 +8,13 @@ export interface UserProfile {
   photoUrl: string;
 }
 
+export interface NotificationPreferences {
+  budgetWarnings: boolean;
+  emiReminders: boolean;
+  lowBalanceAlerts: boolean;
+  lowBalanceThreshold: number;
+}
+
 export interface Transaction {
   id: string;
   amount: number;
@@ -100,6 +107,7 @@ export interface FinancialData {
   wallets: Wallet[];
   profile?: UserProfile;
   metadata: AppMetadata;
+  notificationPreferences?: NotificationPreferences;
 }
 
 export enum View {
@@ -110,5 +118,6 @@ export enum View {
   Investments = 'investments',
   Budgeting = 'budgeting',
   Accounts = 'accounts',
-  PaymentMethods = 'payment-methods'
+  PaymentMethods = 'payment-methods',
+  Settings = 'settings'
 }

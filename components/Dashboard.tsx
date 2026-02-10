@@ -24,7 +24,15 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onViewChange }) => {
   const expSummary = getExpenseSummary(data.transactions);
   const incSummary = getIncomeSummary(data.transactions);
 
-  const totalCapital = incSummary.total + invSummary.totalValue - loanSummary.totalOutstanding;
+  // Calculate real-time liquidity based on current account/wallet balances + investments - all debts
+  const totalAccountBalances = useMemo(() => data.accounts.reduce((acc, a) => acc + a.balance, 0), [data.accounts]);
+  const totalWalletBalances = useMemo(() => data.wallets.reduce((acc, w) => acc + w.balance, 0), [data.wallets]);
+  const totalCardOutstanding = useMemo(() => data.creditCards.reduce((acc, c) => acc + c.outstanding, 0), [data.creditCards]);
+  
+  // Final Net Liquidity Calculation: (Cash + Wallets + Investments) - (Loans + Credit Card Debt)
+  const totalCapital = totalAccountBalances + totalWalletBalances + invSummary.totalValue - loanSummary.totalOutstanding - totalCardOutstanding;
+  
+  // Net flow represents only the performance of this month's transactions
   const netFlow = incSummary.total - expSummary.total;
 
   const pieChartData = useMemo(() => {
@@ -158,7 +166,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onViewChange }) => {
               <span>{formatCurrency(Math.abs(netFlow))} this month</span>
             </div>
           </div>
-          <p className="text-slate-500 text-[10px] lg:text-xs mt-6 font-bold uppercase tracking-widest opacity-60">Cash Flow + Assets - Liabilities</p>
+          <p className="text-slate-500 text-[10px] lg:text-xs mt-6 font-bold uppercase tracking-widest opacity-60">Cash + Wallets + Investments - Debts</p>
         </div>
 
         {/* Total Inflow Logged - Neon Green */}
@@ -178,7 +186,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onViewChange }) => {
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-6">
         <StatCard title="Income" value={formatCurrency(incSummary.total)} icon={<Banknote size={18} className="text-[#39FF14]" />} onClick={() => onViewChange(View.Income)} />
         <StatCard title="Spend" value={formatCurrency(expSummary.total)} icon={<CreditCard size={18} className="text-rose-500" />} onClick={() => onViewChange(View.Expenses)} />
-        <StatCard title="Debt" value={formatCurrency(loanSummary.totalOutstanding)} icon={<Briefcase size={18} className="text-blue-500" />} onClick={() => onViewChange(View.Liabilities)} />
+        <StatCard title="Debt" value={formatCurrency(loanSummary.totalOutstanding + totalCardOutstanding)} icon={<Briefcase size={18} className="text-blue-500" />} onClick={() => onViewChange(View.Liabilities)} />
         <StatCard title="Portfolio" value={formatCurrency(invSummary.totalValue)} icon={<TrendingUp size={18} className="text-amber-500" />} onClick={() => onViewChange(View.Investments)} />
       </div>
 

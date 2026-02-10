@@ -9,10 +9,10 @@ import LiabilitiesManager from './components/LiabilitiesManager';
 import InvestmentPortfolio from './components/InvestmentPortfolio';
 import AccountsManager from './components/AccountsManager';
 import WalletsManager from './components/WalletsManager';
-import Login from './components/Login';
+import SettingsManager from './components/SettingsManager';
 import ProfileModal from './components/ProfileModal';
-import { View, FinancialData, Transaction, Loan, Investment, Budget, Notification, BankAccount, CreditCard, Wallet, UserProfile, AppMetadata, ExpenseCategory } from './types';
-import { Sun, Moon, X, Bell, LogOut } from 'lucide-react';
+import { View, FinancialData, Transaction, Loan, Investment, Budget, Notification, BankAccount, CreditCard, Wallet, UserProfile, AppMetadata, ExpenseCategory, NotificationPreferences } from './types';
+import { Sun, Moon, X, Bell } from 'lucide-react';
 import { calculateEMI, formatCurrency } from './utils/calculations';
 import { BANK_OPTIONS, CARD_OPTIONS, WALLET_PROVIDERS, INCOME_SUB_CATEGORIES, EXPENSE_SUB_CATEGORIES } from './constants';
 
@@ -20,6 +20,13 @@ const DEFAULT_PROFILE: UserProfile = {
   name: 'Alex Johnson',
   phone: '+91 90000 00000',
   photoUrl: 'https://picsum.photos/id/64/100/100'
+};
+
+const DEFAULT_NOTIFICATIONS: NotificationPreferences = {
+  budgetWarnings: true,
+  emiReminders: true,
+  lowBalanceAlerts: true,
+  lowBalanceThreshold: 5000
 };
 
 const DEFAULT_METADATA: AppMetadata = {
@@ -49,13 +56,11 @@ const INITIAL_DATA: FinancialData = {
     { id: 'w-1', name: 'Paytm', balance: 1500, type: 'wallet', provider: 'wallet', nickname: 'Daily Spends' }
   ],
   profile: DEFAULT_PROFILE,
-  metadata: DEFAULT_METADATA
+  metadata: DEFAULT_METADATA,
+  notificationPreferences: DEFAULT_NOTIFICATIONS
 };
 
 const App: React.FC = () => {
-  const [isAuthenticated, setIsAuthenticated] = useState(() => {
-    return localStorage.getItem('fin_track_auth') === 'true';
-  });
   const [currentView, setCurrentView] = useState<View>(View.Dashboard);
   const [isDarkMode, setIsDarkMode] = useState(() => {
     const saved = localStorage.getItem('theme');
@@ -64,12 +69,13 @@ const App: React.FC = () => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   
   const [data, setData] = useState<FinancialData>(() => {
-    const saved = localStorage.getItem('fin_track_data_v4');
+    const saved = localStorage.getItem('fin_track_data_v5');
     if (saved) {
       const parsed = JSON.parse(saved);
       if (!parsed.profile) parsed.profile = DEFAULT_PROFILE;
       if (!parsed.metadata) parsed.metadata = DEFAULT_METADATA;
       if (!parsed.wallets) parsed.wallets = [];
+      if (!parsed.notificationPreferences) parsed.notificationPreferences = DEFAULT_NOTIFICATIONS;
       return parsed;
     }
     return INITIAL_DATA;
@@ -78,26 +84,70 @@ const App: React.FC = () => {
   const [activeNotifications, setActiveNotifications] = useState<Notification[]>([]);
 
   useEffect(() => {
+    const prefs = data.notificationPreferences || DEFAULT_NOTIFICATIONS;
     const now = new Date();
     const today = now.getDate();
     const newNotifications: Notification[] = [];
-    data.loans.forEach(loan => {
-      if (loan.remindersEnabled && loan.reminderDay === today) {
-        const emi = calculateEMI(loan.principal, loan.interestRate, loan.tenure);
-        newNotifications.push({
-          id: `reminder-${loan.id}-${today}`,
-          title: 'Payment Due Today',
-          message: `Your EMI of ${formatCurrency(emi)} for "${loan.name}" is due today.`,
-          type: 'warning',
-          loanId: loan.id
-        });
-      }
-    });
+
+    // EMI Reminders
+    if (prefs.emiReminders) {
+      data.loans.forEach(loan => {
+        if (loan.remindersEnabled && loan.reminderDay === today) {
+          const emi = calculateEMI(loan.principal, loan.interestRate, loan.tenure);
+          newNotifications.push({
+            id: `reminder-${loan.id}-${today}`,
+            title: 'Payment Due Today',
+            message: `Your EMI of ${formatCurrency(emi)} for "${loan.name}" is due today.`,
+            type: 'warning',
+            loanId: loan.id
+          });
+        }
+      });
+    }
+
+    // Low Balance Alerts
+    if (prefs.lowBalanceAlerts) {
+      data.accounts.forEach(acc => {
+        if (acc.balance < prefs.lowBalanceThreshold) {
+          newNotifications.push({
+            id: `low-bal-${acc.id}`,
+            title: 'Low Balance Alert',
+            message: `Your account "${acc.nickname || acc.name}" is below your ${formatCurrency(prefs.lowBalanceThreshold)} threshold.`,
+            type: 'warning'
+          });
+        }
+      });
+    }
+
+    // Budget Warnings
+    if (prefs.budgetWarnings) {
+      const currentMonth = now.getMonth();
+      const currentYear = now.getFullYear();
+      data.budgets.forEach(budget => {
+        const spent = data.transactions
+          .filter(t => t.type === 'expense' && t.category === budget.category && t.subCategory === budget.subCategory)
+          .filter(t => {
+            const d = new Date(t.date);
+            return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+          })
+          .reduce((acc, t) => acc + t.amount, 0);
+
+        if (spent > budget.limit * 0.9) {
+          newNotifications.push({
+            id: `budget-warn-${budget.id}`,
+            title: 'Budget Alert',
+            message: `You have used ${((spent/budget.limit)*100).toFixed(0)}% of your "${budget.subCategory}" budget.`,
+            type: spent > budget.limit ? 'warning' : 'info'
+          });
+        }
+      });
+    }
+
     setActiveNotifications(newNotifications);
-  }, [data.loans]);
+  }, [data]);
 
   useEffect(() => {
-    localStorage.setItem('fin_track_data_v4', JSON.stringify(data));
+    localStorage.setItem('fin_track_data_v5', JSON.stringify(data));
   }, [data]);
 
   useEffect(() => {
@@ -110,18 +160,12 @@ const App: React.FC = () => {
     }
   }, [isDarkMode]);
 
-  const handleLoginSuccess = () => {
-    setIsAuthenticated(true);
-    localStorage.setItem('fin_track_auth', 'true');
-  };
-
-  const handleLogout = () => {
-    setIsAuthenticated(false);
-    localStorage.removeItem('fin_track_auth');
-  };
-
   const handleUpdateProfile = (newProfile: UserProfile) => {
     setData(prev => ({ ...prev, profile: newProfile }));
+  };
+
+  const handleUpdateNotifications = (newPrefs: NotificationPreferences) => {
+    setData(prev => ({ ...prev, notificationPreferences: newPrefs }));
   };
 
   const addTransaction = (t: Transaction) => {
@@ -245,67 +289,74 @@ const App: React.FC = () => {
   const deleteCard = (id: string) => setData(prev => ({ ...prev, creditCards: prev.creditCards.filter(c => c.id !== id) }));
   const deleteWallet = (id: string) => setData(prev => ({ ...prev, wallets: prev.wallets.filter(w => w.id !== id) }));
 
-  const addExpenseCategory = (cat: ExpenseCategory, sub: string) => {
-    setData(prev => ({
-      ...prev,
-      metadata: {
-        ...prev.metadata,
-        expenseCategories: {
-          ...prev.metadata.expenseCategories,
-          [cat]: [...prev.metadata.expenseCategories[cat], sub]
+  // Metadata Management
+  const addCategory = (type: 'income' | 'expense', cat: ExpenseCategory, sub: string) => {
+    setData(prev => {
+      const key = type === 'income' ? 'incomeCategories' : 'expenseCategories';
+      return {
+        ...prev,
+        metadata: {
+          ...prev.metadata,
+          [key]: {
+            ...prev.metadata[key],
+            [cat]: [...prev.metadata[key][cat], sub]
+          }
         }
-      }
-    }));
+      };
+    });
   };
 
-  const updateExpenseCategory = (cat: ExpenseCategory, oldSub: string, newSub: string) => {
-    setData(prev => ({
-      ...prev,
-      metadata: {
-        ...prev.metadata,
-        expenseCategories: {
-          ...prev.metadata.expenseCategories,
-          [cat]: prev.metadata.expenseCategories[cat].map(s => s === oldSub ? newSub : s)
-        }
-      },
-      transactions: prev.transactions.map(t => 
-        (t.type === 'expense' && t.category === cat && t.subCategory === oldSub) ? { ...t, subCategory: newSub } : t
-      ),
-      budgets: prev.budgets.map(b => 
-        (b.category === cat && b.subCategory === oldSub) ? { ...b, subCategory: newSub } : b
-      )
-    }));
+  const updateCategory = (type: 'income' | 'expense', cat: ExpenseCategory, oldSub: string, newSub: string) => {
+    setData(prev => {
+      const key = type === 'income' ? 'incomeCategories' : 'expenseCategories';
+      return {
+        ...prev,
+        metadata: {
+          ...prev.metadata,
+          [key]: {
+            ...prev.metadata[key],
+            [cat]: prev.metadata[key][cat].map(s => s === oldSub ? newSub : s)
+          }
+        },
+        transactions: prev.transactions.map(t => 
+          (t.type === type && t.category === cat && t.subCategory === oldSub) ? { ...t, subCategory: newSub } : t
+        ),
+        budgets: type === 'expense' ? prev.budgets.map(b => 
+          (b.category === cat && b.subCategory === oldSub) ? { ...b, subCategory: newSub } : b
+        ) : prev.budgets
+      };
+    });
   };
 
-  const deleteExpenseCategory = (cat: ExpenseCategory, sub: string) => {
-    setData(prev => ({
-      ...prev,
-      metadata: {
-        ...prev.metadata,
-        expenseCategories: {
-          ...prev.metadata.expenseCategories,
-          [cat]: prev.metadata.expenseCategories[cat].filter(s => s !== sub)
+  const deleteCategory = (type: 'income' | 'expense', cat: ExpenseCategory, sub: string) => {
+    setData(prev => {
+      const key = type === 'income' ? 'incomeCategories' : 'expenseCategories';
+      return {
+        ...prev,
+        metadata: {
+          ...prev.metadata,
+          [key]: {
+            ...prev.metadata[key],
+            [cat]: prev.metadata[key][cat].filter(s => s !== sub)
+          }
         }
-      }
-    }));
+      };
+    });
   };
-
-  if (!isAuthenticated) {
-    return <Login onLoginSuccess={handleLoginSuccess} />;
-  }
 
   const userProfile = data.profile || DEFAULT_PROFILE;
 
   const renderContent = () => {
     switch (currentView) {
       case View.Dashboard: return <Dashboard data={data} onViewChange={setCurrentView} />;
-      case View.Income: return <IncomeTracker transactions={data.transactions} accounts={data.accounts} wallets={data.wallets} categories={data.metadata.incomeCategories} onAdd={addTransaction} onUpdate={updateTransaction} onDelete={deleteTransaction} />;
-      case View.Expenses: return <ExpenseTracker transactions={data.transactions} accounts={data.accounts} creditCards={data.creditCards} wallets={data.wallets} categories={data.metadata.expenseCategories} onAdd={addTransaction} onUpdate={updateTransaction} onDelete={deleteTransaction} onAddCategory={addExpenseCategory} onUpdateCategory={updateExpenseCategory} onDeleteCategory={deleteExpenseCategory} />;
+      case View.Income: return <IncomeTracker transactions={data.transactions} accounts={data.accounts} wallets={data.wallets} categories={data.metadata.incomeCategories} onAdd={addTransaction} onUpdate={updateTransaction} onDelete={deleteTransaction} onAddCategory={(c, s) => addCategory('income', c, s)} onUpdateCategory={(c, o, n) => updateCategory('income', c, o, n)} onDeleteCategory={(c, s) => deleteCategory('income', c, s)} />;
+      case View.Expenses: return <ExpenseTracker transactions={data.transactions} accounts={data.accounts} creditCards={data.creditCards} wallets={data.wallets} categories={data.metadata.expenseCategories} onAdd={addTransaction} onUpdate={updateTransaction} onDelete={deleteTransaction} onAddCategory={(c, s) => addCategory('expense', c, s)} onUpdateCategory={(c, o, n) => updateCategory('expense', c, o, n)} onDeleteCategory={(c, s) => deleteCategory('expense', c, s)} />;
       case View.PaymentMethods: return <WalletsManager wallets={data.wallets} onAdd={addWallet} onUpdate={updateWallet} onDelete={deleteWallet} />;
       case View.Budgeting: return <BudgetManager data={data} onSetBudget={setBudget} />;
       case View.Liabilities: return <LiabilitiesManager loans={data.loans} onAdd={addLoan} onDelete={deleteLoan} onUpdatePaid={updateLoanPaid} />;
       case View.Investments: return <InvestmentPortfolio investments={data.investments} onAdd={addInvestment} onDelete={deleteInvestment} />;
       case View.Accounts: return <AccountsManager accounts={data.accounts} creditCards={data.creditCards} bankOptions={data.metadata.bankOptions} cardOptions={data.metadata.cardOptions} onAddAccount={addAccount} onAddCard={addCard} onUpdateAccount={updateAccount} onUpdateCard={updateCard} onDeleteAccount={deleteAccount} onDeleteCard={deleteCard} />;
+      case View.Settings: return <SettingsManager preferences={data.notificationPreferences || DEFAULT_NOTIFICATIONS} onSave={handleUpdateNotifications} />;
       default: return <Dashboard data={data} onViewChange={setCurrentView} />;
     }
   };
@@ -330,9 +381,6 @@ const App: React.FC = () => {
                 title="Toggle Theme"
               >
                 {isDarkMode ? <Sun size={20} /> : <Moon size={20} />}
-              </button>
-              <button onClick={handleLogout} className="p-2 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 transition-all hover:text-rose-500" title="Logout">
-                <LogOut size={20} />
               </button>
               <div className="flex items-center gap-2 cursor-pointer group" onClick={() => setIsProfileOpen(true)}>
                 <div className="w-8 h-8 lg:w-10 lg:h-10 rounded-full border-2 border-white dark:border-slate-800 shadow-sm overflow-hidden group-hover:border-blue-500 dark:group-hover:border-[#39FF14] transition-all ring-2 ring-transparent group-hover:ring-blue-500/20 dark:group-hover:ring-[#39FF14]/20">

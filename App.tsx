@@ -314,7 +314,7 @@ const App: React.FC = () => {
     <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300">
       <ProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} profile={userProfile} onSave={handleUpdateProfile} />
       
-      <main className="flex-1 pb-32 lg:pb-40 p-4 lg:p-12 w-full overflow-hidden">
+      <main className="flex-1 pb-40 lg:pb-48 p-4 lg:p-12 w-full overflow-hidden">
         <header className="flex flex-col gap-4 mb-6 lg:mb-10 max-w-6xl mx-auto">
           <div className="flex justify-between items-center">
             <div>

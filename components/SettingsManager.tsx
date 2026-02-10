@@ -1,17 +1,19 @@
 
 import React, { useState } from 'react';
-import { NotificationPreferences } from '../types';
-import { Bell, ShieldCheck, AlertTriangle, Landmark, PieChart, ChevronRight, Save, CheckCircle2, Trash2, AlertCircle } from 'lucide-react';
+import { NotificationPreferences, FinancialData } from '../types';
+import { Bell, ShieldCheck, AlertTriangle, Landmark, PieChart, ChevronRight, Save, CheckCircle2, Trash2, AlertCircle, FileDown } from 'lucide-react';
 import { formatCurrency } from '../utils/calculations';
 import ConfirmModal from './ConfirmModal';
+import ExportManager from './ExportManager';
 
 interface SettingsManagerProps {
+  data: FinancialData;
   preferences: NotificationPreferences;
   onSave: (prefs: NotificationPreferences) => void;
   onResetData: () => void;
 }
 
-const SettingsManager: React.FC<SettingsManagerProps> = ({ preferences, onSave, onResetData }) => {
+const SettingsManager: React.FC<SettingsManagerProps> = ({ data, preferences, onSave, onResetData }) => {
   const [formData, setFormData] = useState<NotificationPreferences>({ ...preferences });
   const [saved, setSaved] = useState(false);
   const [showResetConfirm, setShowResetConfirm] = useState(false);
@@ -116,6 +118,9 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({ preferences, onSave, 
           </form>
         </div>
       </div>
+
+      {/* Export Section */}
+      <ExportManager data={data} />
 
       {/* Danger Zone */}
       <div className="bg-rose-50 dark:bg-rose-950/20 p-8 lg:p-10 rounded-[2.5rem] shadow-sm border border-rose-100 dark:border-rose-900/30">

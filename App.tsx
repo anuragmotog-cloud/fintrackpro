@@ -11,8 +11,9 @@ import AccountsManager from './components/AccountsManager';
 import WalletsManager from './components/WalletsManager';
 import SettingsManager from './components/SettingsManager';
 import ProfileModal from './components/ProfileModal';
+import GlobalSearchOverlay from './components/GlobalSearchOverlay';
 import { View, FinancialData, Transaction, Loan, Investment, Budget, Notification, BankAccount, CreditCard, Wallet, UserProfile, AppMetadata, ExpenseCategory, NotificationPreferences } from './types';
-import { Sun, Moon, X, Bell } from 'lucide-react';
+import { Sun, Moon, X, Bell, Search as SearchIcon, Command } from 'lucide-react';
 import { calculateEMI, formatCurrency } from './utils/calculations';
 import { BANK_OPTIONS, CARD_OPTIONS, WALLET_PROVIDERS, INCOME_SUB_CATEGORIES, EXPENSE_SUB_CATEGORIES } from './constants';
 
@@ -59,6 +60,7 @@ const App: React.FC = () => {
     return saved === 'dark' || (!saved && window.matchMedia('(prefers-color-scheme: dark)').matches);
   });
   const [isProfileOpen, setIsProfileOpen] = useState(false);
+  const [isSearchOpen, setIsSearchOpen] = useState(false);
   
   const [data, setData] = useState<FinancialData>(() => {
     const saved = localStorage.getItem('fin_track_data_v5');
@@ -74,6 +76,17 @@ const App: React.FC = () => {
   });
 
   const [activeNotifications, setActiveNotifications] = useState<Notification[]>([]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setIsSearchOpen(prev => !prev);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   useEffect(() => {
     const prefs = data.notificationPreferences || DEFAULT_NOTIFICATIONS;
@@ -353,7 +366,7 @@ const App: React.FC = () => {
       case View.Liabilities: return <LiabilitiesManager loans={data.loans} onAdd={addLoan} onDelete={deleteLoan} onUpdatePaid={updateLoanPaid} />;
       case View.Investments: return <InvestmentPortfolio investments={data.investments} onAdd={addInvestment} onDelete={deleteInvestment} />;
       case View.Accounts: return <AccountsManager accounts={data.accounts} creditCards={data.creditCards} bankOptions={data.metadata.bankOptions} cardOptions={data.metadata.cardOptions} onAddAccount={addAccount} onAddCard={addCard} onUpdateAccount={updateAccount} onUpdateCard={updateCard} onDeleteAccount={deleteAccount} onDeleteCard={deleteCard} />;
-      case View.Settings: return <SettingsManager preferences={data.notificationPreferences || DEFAULT_NOTIFICATIONS} onSave={handleUpdateNotifications} onResetData={resetData} />;
+      case View.Settings: return <SettingsManager data={data} preferences={data.notificationPreferences || DEFAULT_NOTIFICATIONS} onSave={handleUpdateNotifications} onResetData={resetData} />;
       default: return <Dashboard data={data} onViewChange={setCurrentView} />;
     }
   };
@@ -361,17 +374,41 @@ const App: React.FC = () => {
   return (
     <div className="flex min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-900 dark:text-slate-100 transition-colors duration-300">
       <ProfileModal isOpen={isProfileOpen} onClose={() => setIsProfileOpen(false)} profile={userProfile} onSave={handleUpdateProfile} />
+      <GlobalSearchOverlay isOpen={isSearchOpen} onClose={() => setIsSearchOpen(false)} data={data} onViewChange={setCurrentView} />
       
       <main className="flex-1 pb-40 lg:pb-48 p-4 lg:p-12 w-full overflow-hidden">
         <header className="flex flex-col gap-4 mb-6 lg:mb-10 max-w-6xl mx-auto">
           <div className="flex justify-between items-center">
-            <div>
-              <h2 className={`text-xl lg:text-3xl font-black tracking-tight capitalize ${currentView === View.Dashboard ? 'text-blue-600 dark:text-[#39FF14]' : 'text-slate-900 dark:text-white'}`}>
-                {currentView === View.Dashboard ? 'FinTrack' : currentView.replace('-', ' ')}
-              </h2>
-              <p className="text-slate-400 dark:text-slate-500 font-medium text-xs lg:text-sm mt-0.5">Welcome back, <span className="text-slate-900 dark:text-white font-bold">{userProfile.name.split(' ')[0]}.</span></p>
+            <div className="flex items-center gap-6">
+              <div>
+                <h2 className={`text-xl lg:text-3xl font-black tracking-tight capitalize ${currentView === View.Dashboard ? 'text-blue-600 dark:text-[#39FF14]' : 'text-slate-900 dark:text-white'}`}>
+                  {currentView === View.Dashboard ? 'FinTrack' : currentView.replace('-', ' ')}
+                </h2>
+                <p className="text-slate-400 dark:text-slate-500 font-medium text-xs lg:text-sm mt-0.5">Welcome back, <span className="text-slate-900 dark:text-white font-bold">{userProfile.name.split(' ')[0]}.</span></p>
+              </div>
+              
+              {/* Desktop Global Search Bar */}
+              <button 
+                onClick={() => setIsSearchOpen(true)}
+                className="hidden md:flex items-center gap-3 px-4 py-2.5 bg-slate-200 dark:bg-slate-900 border border-transparent hover:border-slate-300 dark:hover:border-slate-800 rounded-2xl text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 transition-all w-64 lg:w-80 group shadow-inner"
+              >
+                <SearchIcon size={18} className="group-hover:scale-110 transition-transform" />
+                <span className="text-sm font-bold truncate">Search finances...</span>
+                <div className="ml-auto flex items-center gap-1 bg-white/10 dark:bg-white/5 px-1.5 py-0.5 rounded-lg border border-white/10">
+                  <Command size={10} />
+                  <span className="text-[10px] font-black">K</span>
+                </div>
+              </button>
             </div>
+
             <div className="flex items-center gap-3 lg:gap-4">
+              <button 
+                onClick={() => setIsSearchOpen(true)}
+                className="md:hidden p-2 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 transition-all"
+                title="Search"
+              >
+                <SearchIcon size={20} />
+              </button>
               <button 
                 onClick={() => setIsDarkMode(!isDarkMode)}
                 className="p-2 rounded-full bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:ring-2 ring-blue-500 dark:ring-[#39FF14] transition-all"

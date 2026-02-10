@@ -3,7 +3,7 @@ import React, { useMemo, useState } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
 import { FinancialData, View } from '../types';
 import { formatCurrency, getInvestmentSummary, getLoanSummary, getExpenseSummary, getIncomeSummary } from '../utils/calculations';
-import { ArrowUpRight, ArrowDownRight, Briefcase, CreditCard, TrendingUp, Banknote, PieChart as PieIcon, BarChart3, AlertTriangle, CheckCircle2, Landmark, Wallet, ChevronRight } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Briefcase, CreditCard, TrendingUp, Banknote, PieChart as PieIcon, BarChart3, AlertTriangle, CheckCircle2, Landmark, Wallet, ChevronRight, SmartphoneNfc, QrCode } from 'lucide-react';
 
 interface DashboardProps {
   data: FinancialData;
@@ -196,11 +196,16 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onViewChange }) => {
           <h3 className="text-sm lg:text-lg font-black text-slate-900 dark:text-white uppercase tracking-tighter flex items-center gap-2">
             <Landmark size={20} className="text-blue-500" /> Account Overview
           </h3>
-          <button onClick={() => onViewChange(View.Accounts)} className="text-[10px] font-black uppercase text-[#39FF14] flex items-center gap-1 hover:underline">
-            Manage Accounts <ChevronRight size={14} />
-          </button>
+          <div className="flex gap-4">
+            <button onClick={() => onViewChange(View.Accounts)} className="text-[10px] font-black uppercase text-[#39FF14] flex items-center gap-1 hover:underline">
+              Banks & Cards <ChevronRight size={14} />
+            </button>
+            <button onClick={() => onViewChange(View.PaymentMethods)} className="text-[10px] font-black uppercase text-blue-500 flex items-center gap-1 hover:underline">
+              Wallets <ChevronRight size={14} />
+            </button>
+          </div>
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
           <div>
             <p className="text-[9px] font-black uppercase text-slate-400 tracking-[0.2em] mb-6">Bank Accounts</p>
             <div className="space-y-4">
@@ -211,11 +216,11 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onViewChange }) => {
                       <Landmark size={20} />
                     </div>
                     <div>
-                      <p className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tighter">{acc.nickname || acc.name}</p>
-                      <p className="text-[9px] text-slate-400 uppercase font-black tracking-widest">{acc.name}</p>
+                      <p className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tighter truncate max-w-[120px]">{acc.nickname || acc.name}</p>
+                      <p className="text-[9px] text-slate-400 uppercase font-black tracking-widest truncate max-w-[120px]">{acc.name}</p>
                     </div>
                   </div>
-                  <p className="text-sm font-black text-slate-900 dark:text-white">{formatCurrency(acc.balance)}</p>
+                  <p className="text-sm font-black text-slate-900 dark:text-white shrink-0">{formatCurrency(acc.balance)}</p>
                 </div>
               )) : <p className="text-xs text-slate-400 italic">No bank accounts added.</p>}
             </div>
@@ -232,7 +237,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onViewChange }) => {
                         <div className="w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center text-rose-600 dark:text-rose-400">
                           <CreditCard size={20} />
                         </div>
-                        <p className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tighter">{card.nickname || card.name}</p>
+                        <p className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tighter truncate max-w-[120px]">{card.nickname || card.name}</p>
                       </div>
                       <div className="text-right">
                         <p className="text-sm font-black text-slate-900 dark:text-white">{formatCurrency(card.outstanding)}</p>
@@ -245,6 +250,25 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onViewChange }) => {
                   </div>
                 );
               }) : <p className="text-xs text-slate-400 italic">No credit cards added.</p>}
+            </div>
+          </div>
+          <div>
+            <p className="text-[9px] font-black uppercase text-slate-400 tracking-[0.2em] mb-6">Digital Wallets</p>
+            <div className="space-y-4">
+              {data.wallets.length > 0 ? data.wallets.map(wallet => (
+                <div key={wallet.id} className="flex justify-between items-center p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-transparent hover:border-white/5 transition-all">
+                  <div className="flex items-center gap-4">
+                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${wallet.provider === 'upi' ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600' : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600'}`}>
+                      {wallet.provider === 'upi' ? <QrCode size={20} /> : <SmartphoneNfc size={20} />}
+                    </div>
+                    <div>
+                      <p className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tighter truncate max-w-[120px]">{wallet.nickname || wallet.name}</p>
+                      <p className="text-[9px] text-slate-400 uppercase font-black tracking-widest truncate max-w-[120px]">{wallet.name}</p>
+                    </div>
+                  </div>
+                  <p className="text-sm font-black text-emerald-600 dark:text-[#39FF14] shrink-0">{formatCurrency(wallet.balance)}</p>
+                </div>
+              )) : <p className="text-xs text-slate-400 italic">No wallets added.</p>}
             </div>
           </div>
         </div>

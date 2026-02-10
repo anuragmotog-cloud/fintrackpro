@@ -1,6 +1,7 @@
+
 import React, { useState } from 'react';
 import { BankAccount, CreditCard as CreditCardType } from '../types';
-import { Landmark, CreditCard, Plus, Trash2, Wallet, Calendar, Edit2, Check, X as CloseIcon, ShieldCheck, Sparkles, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Landmark, CreditCard, Plus, Trash2, Wallet, Calendar, Edit2, Check, X as CloseIcon, ShieldCheck, Sparkles, AlertCircle, CheckCircle2, FileText } from 'lucide-react';
 import { formatCurrency } from '../utils/calculations';
 import { BANK_OPTIONS, CARD_OPTIONS } from '../constants';
 import ConfirmModal from './ConfirmModal';
@@ -39,34 +40,36 @@ const AccountsManager: React.FC<AccountsManagerProps> = ({
   const [tempOutstanding, setTempOutstanding] = useState('');
   const [tempDueDate, setTempDueDate] = useState('');
   
-  const [bankFormData, setBankFormData] = useState({ name: bankOptions[0] || BANK_OPTIONS[0], balance: '', nickname: '' });
-  const [cardFormData, setCardFormData] = useState({ name: cardOptions[0] || CARD_OPTIONS[0], limit: '', outstanding: '0', dueDate: '1', nickname: '' });
+  const [bankFormData, setBankFormData] = useState({ name: bankOptions[0] || BANK_OPTIONS[0], balance: '', nickname: '', customName: '' });
+  const [cardFormData, setCardFormData] = useState({ name: cardOptions[0] || CARD_OPTIONS[0], limit: '', outstanding: '0', dueDate: '1', nickname: '', customName: '' });
 
   const handleBankSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const isCustom = bankFormData.name === 'Other Bank';
     onAddAccount({
       id: Math.random().toString(36).substr(2, 9),
-      name: bankFormData.name,
+      name: isCustom ? bankFormData.customName : bankFormData.name,
       nickname: bankFormData.nickname || undefined,
       balance: parseFloat(bankFormData.balance),
       type: 'bank'
     });
-    setBankFormData({ name: bankOptions[0] || BANK_OPTIONS[0], balance: '', nickname: '' });
+    setBankFormData({ name: bankOptions[0] || BANK_OPTIONS[0], balance: '', nickname: '', customName: '' });
     setShowAdd(false);
   };
 
   const handleCardSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    const isCustom = cardFormData.name === 'Other Card';
     onAddCard({
       id: Math.random().toString(36).substr(2, 9),
-      name: cardFormData.name,
+      name: isCustom ? cardFormData.customName : cardFormData.name,
       nickname: cardFormData.nickname || undefined,
       limit: parseFloat(cardFormData.limit),
       outstanding: parseFloat(cardFormData.outstanding),
       dueDate: parseInt(cardFormData.dueDate),
       type: 'card'
     });
-    setCardFormData({ name: cardOptions[0] || CARD_OPTIONS[0], limit: '', outstanding: '0', dueDate: '1', nickname: '' });
+    setCardFormData({ name: cardOptions[0] || CARD_OPTIONS[0], limit: '', outstanding: '0', dueDate: '1', nickname: '', customName: '' });
     setShowAdd(false);
   };
 
@@ -173,8 +176,8 @@ const AccountsManager: React.FC<AccountsManagerProps> = ({
                   className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 font-medium dark:text-white"
                 />
               </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">Bank Name</label>
+              <div className={bankFormData.name === 'Other Bank' ? 'md:col-span-1' : 'md:col-span-1'}>
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">Select Bank</label>
                 <select
                   value={bankFormData.name}
                   onChange={e => setBankFormData({ ...bankFormData, name: e.target.value })}
@@ -183,6 +186,22 @@ const AccountsManager: React.FC<AccountsManagerProps> = ({
                   {bankOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                 </select>
               </div>
+              {bankFormData.name === 'Other Bank' && (
+                <div className="animate-in slide-in-from-top-2 duration-300">
+                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">Custom Bank Name</label>
+                  <div className="relative">
+                    <FileText size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      required
+                      type="text"
+                      placeholder="Enter Bank Name"
+                      value={bankFormData.customName}
+                      onChange={e => setBankFormData({ ...bankFormData, customName: e.target.value })}
+                      className="w-full bg-slate-100 dark:bg-slate-700/50 border-none rounded-xl pl-12 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-blue-500 font-bold dark:text-white"
+                    />
+                  </div>
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">Initial Balance (₹)</label>
                 <input
@@ -211,7 +230,7 @@ const AccountsManager: React.FC<AccountsManagerProps> = ({
                 />
               </div>
               <div>
-                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">Card Name</label>
+                <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">Select Card Type</label>
                 <select
                   value={cardFormData.name}
                   onChange={e => setCardFormData({ ...cardFormData, name: e.target.value })}
@@ -220,6 +239,22 @@ const AccountsManager: React.FC<AccountsManagerProps> = ({
                   {cardOptions.map(opt => <option key={opt} value={opt}>{opt}</option>)}
                 </select>
               </div>
+              {cardFormData.name === 'Other Card' && (
+                <div className="animate-in slide-in-from-top-2 duration-300">
+                  <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">Custom Card Name</label>
+                  <div className="relative">
+                    <FileText size={16} className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
+                    <input
+                      required
+                      type="text"
+                      placeholder="e.g. Neo Premium Visa"
+                      value={cardFormData.customName}
+                      onChange={e => setCardFormData({ ...cardFormData, customName: e.target.value })}
+                      className="w-full bg-slate-100 dark:bg-slate-700/50 border-none rounded-xl pl-12 pr-4 py-3 focus:outline-none focus:ring-2 focus:ring-rose-500 font-bold dark:text-white"
+                    />
+                  </div>
+                </div>
+              )}
               <div>
                 <label className="block text-xs font-bold text-slate-500 dark:text-slate-400 uppercase mb-2">Credit Limit (₹)</label>
                 <input
@@ -227,7 +262,6 @@ const AccountsManager: React.FC<AccountsManagerProps> = ({
                   type="number"
                   placeholder="100000"
                   value={cardFormData.limit}
-                  /* Fix: Changed ...formData to ...cardFormData to resolve 'Cannot find name formData' error */
                   onChange={e => setCardFormData({ ...cardFormData, limit: e.target.value })}
                   className="w-full bg-slate-50 dark:bg-slate-800 border border-slate-100 dark:border-slate-700 rounded-xl px-4 py-3 focus:outline-none focus:ring-2 focus:ring-rose-500 font-medium dark:text-white"
                 />
@@ -308,10 +342,10 @@ const AccountsManager: React.FC<AccountsManagerProps> = ({
                   </div>
                 ) : (
                   <>
-                    <h3 className="text-lg font-black text-slate-900 dark:text-white mb-1 uppercase tracking-tighter">
+                    <h3 className="text-lg font-black text-slate-900 dark:text-white mb-1 uppercase tracking-tighter truncate pr-8">
                       {acc.nickname || acc.name}
                     </h3>
-                    {acc.nickname && <p className="text-[10px] text-slate-400 font-bold mb-4 uppercase">{acc.name}</p>}
+                    {acc.nickname && <p className="text-[10px] text-slate-400 font-bold mb-4 uppercase truncate">{acc.name}</p>}
                     {!acc.nickname && <div className="h-4 mb-4"></div>}
                   </>
                 )}
@@ -425,12 +459,12 @@ const AccountsManager: React.FC<AccountsManagerProps> = ({
                     </div>
                   ) : (
                     <>
-                      <h3 className="text-xl font-black mb-1 tracking-tighter uppercase relative z-10 truncate leading-none">
+                      <h3 className="text-xl font-black mb-1 tracking-tighter uppercase relative z-10 truncate leading-none pr-12">
                         {card.nickname || card.name}
                       </h3>
                       <div className="flex items-center gap-2 mb-8 relative z-10">
                          {card.nickname ? (
-                            <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest">{card.name}</p>
+                            <p className="text-[10px] text-slate-500 font-black uppercase tracking-widest truncate max-w-[150px]">{card.name}</p>
                          ) : (
                             <div className="flex items-center gap-2">
                               <Calendar size={12} className="text-slate-500"/>

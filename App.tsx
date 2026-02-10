@@ -39,22 +39,14 @@ const DEFAULT_METADATA: AppMetadata = {
 
 const INITIAL_DATA: FinancialData = {
   transactions: [],
-  loans: [
-    { id: '1', name: 'Car Loan', principal: 500000, interestRate: 8.5, tenure: 48, paidAmount: 120000, startDate: '2023-06-01', reminderDay: 5, remindersEnabled: true },
-  ],
-  investments: [
-    { id: '1', name: 'Nifty 50 Index', buyPrice: 21000, currentPrice: 22400, quantity: 10, date: '2023-01-15' },
-  ],
+  loans: [],
+  investments: [],
   budgets: [],
   accounts: [
-    { id: 'acc-1', name: BANK_OPTIONS[0], balance: 45000, type: 'bank' },
+    { id: 'acc-default', name: BANK_OPTIONS[0], balance: 0, type: 'bank', nickname: 'Primary Savings' },
   ],
-  creditCards: [
-    { id: 'card-1', name: CARD_OPTIONS[0], limit: 100000, outstanding: 12000, dueDate: 5, type: 'card' },
-  ],
-  wallets: [
-    { id: 'w-1', name: 'Paytm', balance: 1500, type: 'wallet', provider: 'wallet', nickname: 'Daily Spends' }
-  ],
+  creditCards: [],
+  wallets: [],
   profile: DEFAULT_PROFILE,
   metadata: DEFAULT_METADATA,
   notificationPreferences: DEFAULT_NOTIFICATIONS
@@ -166,6 +158,11 @@ const App: React.FC = () => {
 
   const handleUpdateNotifications = (newPrefs: NotificationPreferences) => {
     setData(prev => ({ ...prev, notificationPreferences: newPrefs }));
+  };
+
+  const resetData = () => {
+    setData(INITIAL_DATA);
+    setCurrentView(View.Dashboard);
   };
 
   const addTransaction = (t: Transaction) => {
@@ -356,7 +353,7 @@ const App: React.FC = () => {
       case View.Liabilities: return <LiabilitiesManager loans={data.loans} onAdd={addLoan} onDelete={deleteLoan} onUpdatePaid={updateLoanPaid} />;
       case View.Investments: return <InvestmentPortfolio investments={data.investments} onAdd={addInvestment} onDelete={deleteInvestment} />;
       case View.Accounts: return <AccountsManager accounts={data.accounts} creditCards={data.creditCards} bankOptions={data.metadata.bankOptions} cardOptions={data.metadata.cardOptions} onAddAccount={addAccount} onAddCard={addCard} onUpdateAccount={updateAccount} onUpdateCard={updateCard} onDeleteAccount={deleteAccount} onDeleteCard={deleteCard} />;
-      case View.Settings: return <SettingsManager preferences={data.notificationPreferences || DEFAULT_NOTIFICATIONS} onSave={handleUpdateNotifications} />;
+      case View.Settings: return <SettingsManager preferences={data.notificationPreferences || DEFAULT_NOTIFICATIONS} onSave={handleUpdateNotifications} onResetData={resetData} />;
       default: return <Dashboard data={data} onViewChange={setCurrentView} />;
     }
   };

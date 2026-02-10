@@ -19,8 +19,10 @@ const ProfileModal: React.FC<ProfileModalProps> = ({ isOpen, onClose, profile, o
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      if (file.size > 2 * 1024 * 1024) {
-        alert("Image too large. Please select an image under 2MB.");
+      // Increased limit to 20MB
+      const maxSize = 20 * 1024 * 1024;
+      if (file.size > maxSize) {
+        alert("Image too large. Please select an image under 20MB.");
         return;
       }
       const reader = new FileReader();

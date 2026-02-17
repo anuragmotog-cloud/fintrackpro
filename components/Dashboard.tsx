@@ -1,11 +1,12 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
-import { FinancialData, View, Budget } from '../types';
+import { FinancialData, View, Budget, Transaction } from '../types';
 import { formatCurrency, getInvestmentSummary, getLoanSummary, getExpenseSummary, getIncomeSummary } from '../utils/calculations';
-import { ArrowUpRight, ArrowDownRight, Briefcase, CreditCard, TrendingUp, Banknote, PieChart as PieIcon, BarChart3, Landmark, ChevronRight, SmartphoneNfc, QrCode, Sparkles, AlertCircle, Target, Wallet } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Briefcase, CreditCard, TrendingUp, Banknote, PieChart as PieIcon, BarChart3, Landmark, ChevronRight, SmartphoneNfc, QrCode, Sparkles, AlertCircle, Target, Wallet, X, ArrowUpCircle, ArrowDownCircle, History } from 'lucide-react';
 import { FinancialInsight, getFinancialInsights } from '../services/geminiService';
 import AIInsights from './AIInsights';
+import { getCategoryIcon } from '../constants';
 
 interface DashboardProps {
   data: FinancialData;
@@ -22,6 +23,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onViewChange }) => {
   const [barTimeframe, setBarTimeframe] = useState<BarTimeframe>(3);
   const [insights, setInsights] = useState<FinancialInsight[]>([]);
   const [loadingInsights, setLoadingInsights] = useState(false);
+  const [selectedSource, setSelectedSource] = useState<{ id: string, name: string, balance: number, type: string } | null>(null);
 
   useEffect(() => {
     const fetchInsights = async () => {
@@ -70,13 +72,28 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onViewChange }) => {
 
   const allAccounts = useMemo(() => {
     const combined = [
-      ...data.accounts.map(a => ({ ...a, icon: <Landmark size={18} />, typeLabel: 'BANK' })),
-      ...data.wallets.map(w => ({ ...w, icon: <SmartphoneNfc size={18} />, typeLabel: 'WALLET', balance: w.balance })),
-      ...data.creditCards.map(c => ({ ...c, icon: <CreditCard size={18} />, typeLabel: 'CARD', balance: -c.outstanding }))
+      ...data.accounts.map(a => ({ id: a.id, name: a.nickname || a.name, rawName: a.name, icon: <Landmark size={20} />, typeLabel: 'BANK', balance: a.balance })),
+      ...data.wallets.map(w => ({ id: w.id, name: w.nickname || w.name, rawName: w.name, icon: <SmartphoneNfc size={20} />, typeLabel: 'WALLET', balance: w.balance })),
+      ...data.creditCards.map(c => ({ id: c.id, name: c.nickname || c.name, rawName: c.name, icon: <CreditCard size={20} />, typeLabel: 'CARD', balance: -c.outstanding }))
     ];
-    // Sort by absolute balance magnitude so most significant accounts show first
     return combined.sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance)).slice(0, 6);
   }, [data.accounts, data.wallets, data.creditCards]);
+
+  const sourceTransactions = useMemo(() => {
+    if (!selectedSource) return [];
+    return data.transactions
+      .filter(t => t.sourceId === selectedSource.id)
+      .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  }, [selectedSource, data.transactions]);
+
+  const sourceStats = useMemo(() => {
+    if (!selectedSource) return { income: 0, expense: 0 };
+    return sourceTransactions.reduce((acc, t) => {
+      if (t.type === 'income') acc.income += t.amount;
+      else acc.expense += t.amount;
+      return acc;
+    }, { income: 0, expense: 0 });
+  }, [sourceTransactions, selectedSource]);
 
   const pieChartData = useMemo(() => {
     const now = new Date();
@@ -195,6 +212,88 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onViewChange }) => {
 
   return (
     <div className="space-y-6 lg:space-y-8 animate-in fade-in duration-500 pb-10">
+      {/* Transaction History Modal */}
+      {selectedSource && (
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-300" onClick={() => setSelectedSource(null)} />
+          <div className="relative bg-white dark:bg-slate-900 w-full max-w-xl rounded-[2.5rem] shadow-2xl border border-slate-100 dark:border-slate-800 flex flex-col max-h-[85vh] animate-in zoom-in-95 duration-300 overflow-hidden">
+             
+             {/* Modal Header */}
+             <div className="p-6 lg:p-8 border-b border-slate-100 dark:border-slate-800 flex justify-between items-start">
+                <div className="flex gap-4">
+                   <div className="w-14 h-14 bg-slate-50 dark:bg-slate-800 rounded-2xl flex items-center justify-center text-blue-500 shadow-inner">
+                      {allAccounts.find(a => a.id === selectedSource.id)?.icon}
+                   </div>
+                   <div>
+                      <h3 className="text-xl font-black uppercase tracking-tight text-slate-900 dark:text-white leading-tight">
+                         {selectedSource.name}
+                      </h3>
+                      <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5 mt-1">
+                         <History size={12} /> Account Activity History
+                      </p>
+                      <div className="flex gap-2 mt-3">
+                         <span className="px-2 py-1 bg-blue-50 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg text-[9px] font-black uppercase border border-blue-100 dark:border-blue-800">{selectedSource.type}</span>
+                         <span className="px-2 py-1 bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 rounded-lg text-[9px] font-black uppercase border border-emerald-100 dark:border-emerald-800">Bal: {formatCurrency(selectedSource.balance)}</span>
+                      </div>
+                   </div>
+                </div>
+                <button onClick={() => setSelectedSource(null)} className="p-2 text-slate-400 hover:text-rose-500 transition-colors bg-slate-50 dark:bg-slate-800 rounded-full"><X size={20} /></button>
+             </div>
+
+             {/* Statistics Summary */}
+             <div className="grid grid-cols-2 gap-4 p-6 lg:px-8 pt-6 pb-0">
+                <div className="bg-emerald-50 dark:bg-emerald-900/10 p-4 rounded-3xl border border-emerald-100 dark:border-emerald-900/20">
+                   <p className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-widest mb-1">Total Inflow</p>
+                   <p className="text-lg font-black text-emerald-600 dark:text-emerald-500">+{formatCurrency(sourceStats.income)}</p>
+                </div>
+                <div className="bg-rose-50 dark:bg-rose-900/10 p-4 rounded-3xl border border-rose-100 dark:border-rose-900/20">
+                   <p className="text-[9px] font-black text-rose-600 dark:text-rose-400 uppercase tracking-widest mb-1">Total Outflow</p>
+                   <p className="text-lg font-black text-rose-600 dark:text-rose-500">-{formatCurrency(sourceStats.expense)}</p>
+                </div>
+             </div>
+
+             {/* Transaction List */}
+             <div className="flex-1 overflow-y-auto p-6 lg:p-8 space-y-3 no-scrollbar">
+                {sourceTransactions.length === 0 ? (
+                  <div className="text-center py-20 flex flex-col items-center gap-4">
+                     <div className="w-16 h-16 bg-slate-50 dark:bg-slate-800 rounded-full flex items-center justify-center text-slate-300 dark:text-slate-700">
+                        <History size={32} />
+                     </div>
+                     <p className="text-slate-400 font-black text-xs uppercase tracking-widest opacity-60">No financial footprint found</p>
+                  </div>
+                ) : (
+                  sourceTransactions.map(tx => (
+                    <div key={tx.id} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-950/60 rounded-3xl border border-slate-100 dark:border-white/5 hover:bg-white dark:hover:bg-slate-800 transition-all group">
+                       <div className="flex items-center gap-4 min-w-0">
+                          <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 shadow-sm ${tx.type === 'income' ? 'text-emerald-500 bg-emerald-50 dark:bg-emerald-900/30' : 'text-rose-500 bg-rose-50 dark:bg-rose-900/30'}`}>
+                             {getCategoryIcon(tx.subCategory)}
+                          </div>
+                          <div className="min-w-0">
+                             <p className="text-sm font-bold text-slate-900 dark:text-white truncate pr-2">{tx.description || tx.subCategory}</p>
+                             <div className="flex items-center gap-2 mt-0.5">
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">{tx.date}</span>
+                                <span className="w-1 h-1 bg-slate-300 dark:bg-slate-700 rounded-full"></span>
+                                <span className="text-[9px] font-black text-slate-500 dark:text-slate-500 uppercase tracking-widest truncate">{tx.subCategory}</span>
+                             </div>
+                          </div>
+                       </div>
+                       <div className="text-right shrink-0">
+                          <p className={`text-sm font-black ${tx.type === 'income' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                             {tx.type === 'income' ? '+' : '-'}{formatCurrency(tx.amount)}
+                          </p>
+                       </div>
+                    </div>
+                  ))
+                )}
+             </div>
+
+             <div className="p-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-100 dark:border-slate-800 text-center">
+                <button onClick={() => setSelectedSource(null)} className="text-[10px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest hover:underline">Close Detail View</button>
+             </div>
+          </div>
+        </div>
+      )}
+
       {/* AI Intelligence Header */}
       <AIInsights insights={insights} loading={loadingInsights} />
 
@@ -244,12 +343,15 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onViewChange }) => {
 
       {/* Account & Budget Snapshots */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
-        {/* Account Overview Section (Updated) */}
+        {/* Account Overview Section */}
         <div className="bg-white dark:bg-slate-900 p-8 lg:p-10 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-slate-800">
            <div className="flex justify-between items-center mb-8">
-             <h3 className="text-sm lg:text-lg font-black uppercase tracking-tighter text-slate-900 dark:text-white flex items-center gap-2">
-               <Landmark size={20} className="text-blue-500" /> Account Overview
-             </h3>
+             <div className="flex items-center gap-3">
+               <Landmark size={20} className="text-blue-500" />
+               <h3 className="text-sm lg:text-lg font-black uppercase tracking-tighter text-slate-900 dark:text-white">
+                 Account Overview
+               </h3>
+             </div>
              <button onClick={() => onViewChange(View.Accounts)} className="text-[10px] font-black uppercase tracking-widest text-blue-600 hover:underline">Manage All</button>
            </div>
            
@@ -258,22 +360,27 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onViewChange }) => {
                <div className="py-10 text-center text-slate-400 text-xs font-black uppercase tracking-widest opacity-40">No accounts linked</div>
              ) : (
                allAccounts.map((acc, i) => (
-                 <div key={i} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-950 rounded-3xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group border border-transparent dark:border-white/5">
+                 <button 
+                  key={i} 
+                  onClick={() => setSelectedSource({ id: acc.id, name: acc.name, balance: acc.balance, type: acc.typeLabel })}
+                  className="w-full flex items-center justify-between p-4 bg-slate-100 dark:bg-slate-950/60 rounded-3xl hover:bg-slate-200 dark:hover:bg-slate-800 transition-all group border border-transparent dark:border-white/5 active:scale-[0.98]"
+                 >
                     <div className="flex items-center gap-4 min-w-0">
-                      <div className="w-12 h-12 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl flex items-center justify-center text-slate-400 group-hover:text-blue-500 transition-colors shadow-sm">
+                      <div className="w-12 h-12 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl flex items-center justify-center text-slate-400 group-hover:text-blue-500 transition-colors shadow-sm shrink-0">
                          {acc.icon}
                       </div>
-                      <div className="min-w-0">
-                        <p className="text-sm font-black text-slate-900 dark:text-white truncate uppercase tracking-tighter">{acc.nickname || acc.name}</p>
-                        <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest">{(acc as any).typeLabel || 'ENTRY'}</p>
+                      <div className="min-w-0 text-left">
+                        <p className="text-sm font-black text-slate-900 dark:text-white truncate uppercase tracking-tighter">{acc.name}</p>
+                        <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest">{acc.typeLabel}</p>
                       </div>
                     </div>
                     <div className="text-right shrink-0">
                        <p className={`text-sm font-black ${acc.balance >= 0 ? 'text-slate-900 dark:text-white' : 'text-rose-500'}`}>
                          {formatCurrency(acc.balance)}
                        </p>
+                       <p className="text-[8px] font-black text-blue-600 dark:text-blue-400 uppercase tracking-widest opacity-0 group-hover:opacity-100 transition-opacity">View Details</p>
                     </div>
-                 </div>
+                 </button>
                ))
              )}
            </div>

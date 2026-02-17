@@ -1,8 +1,8 @@
 
 import React, { useState, useMemo, useEffect } from 'react';
-import { Transaction, ExpenseCategory, BankAccount, CreditCard, Wallet } from '../types';
+import { Transaction, ExpenseCategory, BankAccount, CreditCard, Wallet, Loan } from '../types';
 import { formatCurrency } from '../utils/calculations';
-import { Plus, Trash2, Edit2, XCircle, ShoppingBag, Wallet as WalletIcon, Filter, Settings, Save, Check, X } from 'lucide-react';
+import { Plus, Trash2, Edit2, XCircle, ShoppingBag, Wallet as WalletIcon, Filter, Settings, Save, Check, X, Link as LinkIcon, Info } from 'lucide-react';
 import { getCategoryIcon } from '../constants';
 import ConfirmModal from './ConfirmModal';
 
@@ -11,6 +11,7 @@ interface ExpenseTrackerProps {
   accounts: BankAccount[];
   creditCards: CreditCard[];
   wallets: Wallet[];
+  loans: Loan[];
   categories: Record<ExpenseCategory, string[]>;
   onAdd: (t: Transaction) => void;
   onUpdate: (t: Transaction) => void;
@@ -25,6 +26,7 @@ const ExpenseTracker: React.FC<ExpenseTrackerProps> = ({
   accounts, 
   creditCards, 
   wallets, 
+  loans,
   categories, 
   onAdd, 
   onUpdate, 
@@ -45,7 +47,8 @@ const ExpenseTracker: React.FC<ExpenseTrackerProps> = ({
     subCategory: categories[activeTab]?.[0] || 'Other',
     description: '',
     date: new Date().toISOString().split('T')[0],
-    sourceId: accounts[0]?.id || creditCards[0]?.id || wallets[0]?.id || ''
+    sourceId: accounts[0]?.id || creditCards[0]?.id || wallets[0]?.id || '',
+    loanId: ''
   });
 
   useEffect(() => {
@@ -55,14 +58,14 @@ const ExpenseTracker: React.FC<ExpenseTrackerProps> = ({
         subCategory: editingTransaction.subCategory,
         description: editingTransaction.description,
         date: editingTransaction.date,
-        sourceId: editingTransaction.sourceId || ''
+        sourceId: editingTransaction.sourceId || '',
+        loanId: editingTransaction.loanId || ''
       });
       setActiveTab(editingTransaction.category);
       setShowAddForm(true);
     }
   }, [editingTransaction]);
 
-  // Update formData's subCategory if tab changes and current subCategory isn't in new list
   useEffect(() => {
     if (!categories[activeTab]?.includes(formData.subCategory)) {
         setFormData(prev => ({ ...prev, subCategory: categories[activeTab]?.[0] || 'Other' }));
@@ -87,7 +90,8 @@ const ExpenseTracker: React.FC<ExpenseTrackerProps> = ({
       subCategory: formData.subCategory,
       description: formData.description,
       date: formData.date,
-      sourceId: formData.sourceId
+      sourceId: formData.sourceId,
+      loanId: formData.loanId || undefined
     };
 
     if (editingTransaction) {
@@ -107,9 +111,15 @@ const ExpenseTracker: React.FC<ExpenseTrackerProps> = ({
       subCategory: categories[activeTab]?.[0] || 'Other',
       description: '',
       date: new Date().toISOString().split('T')[0],
-      sourceId: accounts[0]?.id || creditCards[0]?.id || wallets[0]?.id || ''
+      sourceId: accounts[0]?.id || creditCards[0]?.id || wallets[0]?.id || '',
+      loanId: ''
     });
     setEditingTransaction(null);
+  };
+
+  const getLoanName = (id?: string) => {
+    if (!id) return null;
+    return loans.find(l => l.id === id)?.name;
   };
 
   return (
@@ -146,16 +156,14 @@ const ExpenseTracker: React.FC<ExpenseTrackerProps> = ({
         ))}
       </div>
 
-      <div className="flex gap-3">
-        {!showAddForm && (
+      {!showAddForm && (
+        <div className="flex gap-3">
           <button 
             onClick={() => setShowAddForm(true)}
             className="flex-1 bg-rose-600 text-white p-5 rounded-[2rem] font-black uppercase tracking-widest flex items-center justify-center gap-3 shadow-xl shadow-rose-500/20 active:scale-95 transition-all"
           >
             <Plus size={24} /> Log New Expense
           </button>
-        )}
-        {!showAddForm && (
           <button 
             onClick={() => setShowCategoryManager(true)}
             className="p-5 bg-slate-900 dark:bg-slate-800 text-white rounded-[2rem] shadow-xl hover:bg-slate-800 transition-all flex items-center justify-center"
@@ -163,8 +171,8 @@ const ExpenseTracker: React.FC<ExpenseTrackerProps> = ({
           >
             <Settings size={24} />
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
       {showAddForm && (
         <div className="bg-white dark:bg-slate-900 p-6 rounded-[2.5rem] border border-slate-100 dark:border-slate-800 shadow-xl animate-in fade-in zoom-in-95">
@@ -209,24 +217,45 @@ const ExpenseTracker: React.FC<ExpenseTrackerProps> = ({
               </div>
             </div>
 
-            <div>
-              <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-2">Payment Source</label>
-              <select
-                required
-                value={formData.sourceId}
-                onChange={e => setFormData({ ...formData, sourceId: e.target.value })}
-                className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-5 py-4 text-sm font-bold dark:text-white appearance-none"
-              >
-                <optgroup label="Bank Accounts">
-                  {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.nickname || acc.name}</option>)}
-                </optgroup>
-                <optgroup label="Credit Cards">
-                  {creditCards.map(card => <option key={card.id} value={card.id}>{card.nickname || card.name}</option>)}
-                </optgroup>
-                <optgroup label="Wallets & UPI">
-                  {wallets.map(w => <option key={w.id} value={w.id}>{w.nickname || w.name}</option>)}
-                </optgroup>
-              </select>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-2">Payment Source</label>
+                <select
+                  required
+                  value={formData.sourceId}
+                  onChange={e => setFormData({ ...formData, sourceId: e.target.value })}
+                  className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-5 py-4 text-sm font-bold dark:text-white appearance-none"
+                >
+                  <optgroup label="Bank Accounts">
+                    {accounts.map(acc => <option key={acc.id} value={acc.id}>{acc.nickname || acc.name}</option>)}
+                  </optgroup>
+                  <optgroup label="Credit Cards">
+                    {creditCards.map(card => <option key={card.id} value={card.id}>{card.nickname || card.name}</option>)}
+                  </optgroup>
+                  <optgroup label="Wallets & UPI">
+                    {wallets.map(w => <option key={w.id} value={w.id}>{w.nickname || w.name}</option>)}
+                  </optgroup>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1.5 ml-2 flex items-center gap-1.5">
+                  Link to Loan (EMI Payoff)
+                </label>
+                <select
+                  value={formData.loanId}
+                  onChange={e => setFormData({ ...formData, loanId: e.target.value })}
+                  className="w-full bg-slate-50 dark:bg-slate-800 border-none rounded-2xl px-5 py-4 text-sm font-bold dark:text-white appearance-none"
+                >
+                  <option value="">No Loan Linked</option>
+                  {loans.map(loan => <option key={loan.id} value={loan.id}>{loan.name}</option>)}
+                </select>
+                {formData.loanId && (
+                  <p className="mt-1.5 flex items-center gap-1.5 text-[9px] font-black text-blue-500 uppercase tracking-widest ml-2">
+                    <Info size={10} /> This will automatically update your loan balance.
+                  </p>
+                )}
+              </div>
             </div>
 
             <div className="relative">
@@ -300,7 +329,14 @@ const ExpenseTracker: React.FC<ExpenseTrackerProps> = ({
                 </div>
                 <div>
                   <p className="text-sm font-bold text-slate-900 dark:text-white leading-tight">{tx.description || tx.subCategory}</p>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">{tx.date} • {tx.subCategory}</p>
+                  <div className="flex flex-wrap items-center gap-2 mt-0.5">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase">{tx.date} • {tx.subCategory}</p>
+                    {tx.loanId && (
+                      <div className="flex items-center gap-1 px-1.5 py-0.5 bg-blue-50 dark:bg-blue-900/20 text-blue-600 dark:text-blue-400 rounded-md text-[8px] font-black uppercase tracking-wider">
+                        <LinkIcon size={8} /> Loan: {getLoanName(tx.loanId)}
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
               <div className="flex items-center gap-3">

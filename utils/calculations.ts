@@ -8,6 +8,29 @@ export const calculateEMI = (principal: number, annualRate: number, tenureMonths
   return emi;
 };
 
+export const calculatePayoffProjection = (outstanding: number, annualRate: number, emi: number) => {
+  if (outstanding <= 0) return { months: 0, totalInterest: 0 };
+  if (annualRate === 0) return { months: Math.ceil(outstanding / emi), totalInterest: 0 };
+  
+  const monthlyRate = annualRate / 12 / 100;
+  
+  // Formula: n = -log(1 - (P*r)/E) / log(1 + r)
+  // where P is outstanding, r is monthly rate, E is EMI
+  const inner = 1 - (outstanding * monthlyRate) / emi;
+  
+  // If EMI is too low to cover interest, it will never be paid off
+  if (inner <= 0) return { months: Infinity, totalInterest: Infinity };
+  
+  const remainingMonths = -Math.log(inner) / Math.log(1 + monthlyRate);
+  const totalPayments = emi * remainingMonths;
+  const totalInterest = totalPayments - outstanding;
+
+  return { 
+    months: Math.ceil(remainingMonths), 
+    totalInterest: Math.max(0, totalInterest) 
+  };
+};
+
 export const formatCurrency = (amount: number): string => {
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',

@@ -24,6 +24,7 @@ export interface Transaction {
   description: string;
   date: string;
   sourceId?: string; // ID of the Bank Account, Credit Card, or Wallet
+  loanId?: string; // Linked Loan ID for repayment tracking
 }
 
 export interface BankAccount {
@@ -79,6 +80,7 @@ export interface Budget {
   category: ExpenseCategory;
   subCategory: string;
   limit: number;
+  rolloverEnabled?: boolean;
 }
 
 export interface Notification {

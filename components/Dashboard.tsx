@@ -1,9 +1,11 @@
 
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 import { PieChart, Pie, Cell, ResponsiveContainer, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from 'recharts';
-import { FinancialData, View } from '../types';
+import { FinancialData, View, Budget } from '../types';
 import { formatCurrency, getInvestmentSummary, getLoanSummary, getExpenseSummary, getIncomeSummary } from '../utils/calculations';
-import { ArrowUpRight, ArrowDownRight, Briefcase, CreditCard, TrendingUp, Banknote, PieChart as PieIcon, BarChart3, AlertTriangle, CheckCircle2, Landmark, Wallet, ChevronRight, SmartphoneNfc, QrCode } from 'lucide-react';
+import { ArrowUpRight, ArrowDownRight, Briefcase, CreditCard, TrendingUp, Banknote, PieChart as PieIcon, BarChart3, Landmark, ChevronRight, SmartphoneNfc, QrCode, Sparkles, AlertCircle, Target, Wallet } from 'lucide-react';
+import { FinancialInsight, getFinancialInsights } from '../services/geminiService';
+import AIInsights from './AIInsights';
 
 interface DashboardProps {
   data: FinancialData;
@@ -18,22 +20,63 @@ type BarTimeframe = '7d' | '30d' | 3 | 6 | 12;
 const Dashboard: React.FC<DashboardProps> = ({ data, onViewChange }) => {
   const [pieTimeframe, setPieTimeframe] = useState<PieTimeframe>('month');
   const [barTimeframe, setBarTimeframe] = useState<BarTimeframe>(3);
+  const [insights, setInsights] = useState<FinancialInsight[]>([]);
+  const [loadingInsights, setLoadingInsights] = useState(false);
+
+  useEffect(() => {
+    const fetchInsights = async () => {
+      if (data.transactions.length > 5) {
+        setLoadingInsights(true);
+        const res = await getFinancialInsights(data);
+        setInsights(res);
+        setLoadingInsights(false);
+      }
+    };
+    fetchInsights();
+  }, [data.transactions.length]);
 
   const invSummary = getInvestmentSummary(data.investments);
   const loanSummary = getLoanSummary(data.loans);
   const expSummary = getExpenseSummary(data.transactions);
   const incSummary = getIncomeSummary(data.transactions);
 
-  // Calculate real-time liquidity based on current account/wallet balances + investments - all debts
   const totalAccountBalances = useMemo(() => data.accounts.reduce((acc, a) => acc + a.balance, 0), [data.accounts]);
   const totalWalletBalances = useMemo(() => data.wallets.reduce((acc, w) => acc + w.balance, 0), [data.wallets]);
   const totalCardOutstanding = useMemo(() => data.creditCards.reduce((acc, c) => acc + c.outstanding, 0), [data.creditCards]);
   
-  // Final Net Liquidity Calculation: (Cash + Wallets + Investments) - (Loans + Credit Card Debt)
   const totalCapital = totalAccountBalances + totalWalletBalances + invSummary.totalValue - loanSummary.totalOutstanding - totalCardOutstanding;
-  
-  // Net flow represents only the performance of this month's transactions
   const netFlow = incSummary.total - expSummary.total;
+
+  const currentMonth = new Date().getMonth();
+  const currentYear = new Date().getFullYear();
+
+  const budgetSummary = useMemo(() => {
+    return data.budgets.map(budget => {
+      const spent = data.transactions
+        .filter(t => t.type === 'expense' && t.category === budget.category && t.subCategory === budget.subCategory)
+        .filter(t => {
+          const d = new Date(t.date);
+          return d.getMonth() === currentMonth && d.getFullYear() === currentYear;
+        })
+        .reduce((acc, t) => acc + t.amount, 0);
+      
+      return {
+        ...budget,
+        spent,
+        percentage: budget.limit > 0 ? (spent / budget.limit) * 100 : 0
+      };
+    }).sort((a, b) => b.percentage - a.percentage).slice(0, 4);
+  }, [data.budgets, data.transactions, currentMonth, currentYear]);
+
+  const allAccounts = useMemo(() => {
+    const combined = [
+      ...data.accounts.map(a => ({ ...a, icon: <Landmark size={18} />, typeLabel: 'BANK' })),
+      ...data.wallets.map(w => ({ ...w, icon: <SmartphoneNfc size={18} />, typeLabel: 'WALLET', balance: w.balance })),
+      ...data.creditCards.map(c => ({ ...c, icon: <CreditCard size={18} />, typeLabel: 'CARD', balance: -c.outstanding }))
+    ];
+    // Sort by absolute balance magnitude so most significant accounts show first
+    return combined.sort((a, b) => Math.abs(b.balance) - Math.abs(a.balance)).slice(0, 6);
+  }, [data.accounts, data.wallets, data.creditCards]);
 
   const pieChartData = useMemo(() => {
     const now = new Date();
@@ -152,137 +195,137 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onViewChange }) => {
 
   return (
     <div className="space-y-6 lg:space-y-8 animate-in fade-in duration-500 pb-10">
+      {/* AI Intelligence Header */}
+      <AIInsights insights={insights} loading={loadingInsights} />
+
       {/* Top Main Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 lg:gap-6">
-        {/* Estimated Net Liquidity - Deep Slate */}
-        <div className="bg-slate-900 dark:bg-slate-900 p-6 lg:p-10 rounded-[2.5rem] shadow-2xl border border-white/5 col-span-1 md:col-span-2 flex flex-col justify-center">
-          <p className="text-slate-500 dark:text-slate-500 text-[10px] lg:text-xs font-black uppercase tracking-[0.2em] mb-3">Estimated Net Liquidity</p>
-          <div className="flex flex-wrap items-baseline gap-2 lg:gap-4">
-            <h2 className="text-4xl lg:text-6xl font-black text-white tracking-tighter leading-none">
+        <div className="bg-slate-950 dark:bg-slate-900 p-8 lg:p-12 rounded-[3rem] shadow-2xl border border-white/5 col-span-1 md:col-span-2 flex flex-col justify-center relative overflow-hidden group">
+          <div className="absolute top-0 right-0 p-12 opacity-[0.03] group-hover:opacity-10 transition-opacity">
+            <TrendingUp size={180} />
+          </div>
+          <p className="text-slate-500 dark:text-slate-500 text-[10px] lg:text-xs font-black uppercase tracking-[0.3em] mb-4 flex items-center gap-2">
+             <Sparkles size={14} className="text-[#39FF14]" /> Combined Net Liquidity
+          </p>
+          <div className="flex flex-wrap items-baseline gap-4 lg:gap-6 relative z-10">
+            <h2 className="text-5xl lg:text-7xl font-black text-white tracking-tighter leading-none">
               {formatCurrency(totalCapital)}
             </h2>
-            <div className={`flex items-center text-xs lg:text-sm font-black ${netFlow >= 0 ? 'text-[#39FF14]' : 'text-rose-500'}`}>
+            <div className={`flex items-center text-xs lg:text-sm font-black px-4 py-2 rounded-2xl ${netFlow >= 0 ? 'bg-[#39FF14]/10 text-[#39FF14]' : 'bg-rose-500/10 text-rose-500'}`}>
               {netFlow >= 0 ? <ArrowUpRight size={18} /> : <ArrowDownRight size={18} />}
               <span>{formatCurrency(Math.abs(netFlow))} this month</span>
             </div>
           </div>
-          <p className="text-slate-500 text-[10px] lg:text-xs mt-6 font-bold uppercase tracking-widest opacity-60">Cash + Wallets + Investments - Debts</p>
+          <p className="text-slate-500 text-[9px] lg:text-xs mt-8 font-bold uppercase tracking-[0.2em] opacity-40">Assets + Cash + Investments - Total Liabilities</p>
         </div>
 
-        {/* Total Inflow Logged - Neon Green */}
-        <div className="bg-[#10b981] dark:bg-[#39FF14] p-6 lg:p-10 rounded-[2.5rem] shadow-[0_20px_50px_rgba(57,255,20,0.25)] text-slate-900 flex flex-col justify-between transition-transform hover:scale-[1.01]">
+        <div className="bg-[#39FF14] p-8 lg:p-10 rounded-[3rem] shadow-[0_20px_60px_rgba(57,255,20,0.3)] text-slate-950 flex flex-col justify-between transition-all hover:scale-[1.02] cursor-pointer" onClick={() => onViewChange(View.Income)}>
           <div>
-            <div className="w-12 h-12 bg-slate-950/10 rounded-2xl flex items-center justify-center mb-6">
-              <Banknote size={24} strokeWidth={3} />
+            <div className="w-14 h-14 bg-slate-950/10 rounded-2xl flex items-center justify-center mb-6">
+              <Banknote size={28} strokeWidth={3} />
             </div>
-            <p className="text-slate-900/60 text-[10px] font-black uppercase tracking-widest">Total Inflow Logged</p>
-            <h3 className="text-3xl lg:text-4xl font-black mt-1 leading-tight tracking-tighter">{formatCurrency(incSummary.total)}</h3>
+            <p className="text-slate-950/50 text-[10px] font-black uppercase tracking-[0.3em]">Monthly Inflow</p>
+            <h3 className="text-4xl lg:text-5xl font-black mt-1 leading-tight tracking-tighter">{formatCurrency(incSummary.total)}</h3>
           </div>
-          <p className="text-[10px] font-black uppercase tracking-widest mt-6 opacity-60">Tracked Daily</p>
+          <div className="flex justify-between items-center mt-8">
+            <p className="text-[9px] font-black uppercase tracking-widest opacity-60">Across all contexts</p>
+            <ChevronRight size={20} />
+          </div>
         </div>
       </div>
 
-      {/* 2x2 or 1x4 Stat Grid */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 lg:gap-6">
-        <StatCard title="Income" value={formatCurrency(incSummary.total)} icon={<Banknote size={18} className="text-[#39FF14]" />} onClick={() => onViewChange(View.Income)} />
-        <StatCard title="Spend" value={formatCurrency(expSummary.total)} icon={<CreditCard size={18} className="text-rose-500" />} onClick={() => onViewChange(View.Expenses)} />
-        <StatCard title="Debt" value={formatCurrency(loanSummary.totalOutstanding + totalCardOutstanding)} icon={<Briefcase size={18} className="text-blue-500" />} onClick={() => onViewChange(View.Liabilities)} />
-        <StatCard title="Portfolio" value={formatCurrency(invSummary.totalValue)} icon={<TrendingUp size={18} className="text-amber-500" />} onClick={() => onViewChange(View.Investments)} />
+      {/* Stats Grid */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 lg:gap-6">
+        <StatCard title="Income" value={formatCurrency(incSummary.total)} icon={<Banknote size={20} className="text-[#39FF14]" />} onClick={() => onViewChange(View.Income)} />
+        <StatCard title="Spend" value={formatCurrency(expSummary.total)} icon={<CreditCard size={20} className="text-rose-500" />} onClick={() => onViewChange(View.Expenses)} />
+        <StatCard title="Debt" value={formatCurrency(loanSummary.totalOutstanding + totalCardOutstanding)} icon={<Briefcase size={20} className="text-blue-500" />} onClick={() => onViewChange(View.Liabilities)} />
+        <StatCard title="Portfolio" value={formatCurrency(invSummary.totalValue)} icon={<TrendingUp size={20} className="text-amber-500" />} onClick={() => onViewChange(View.Investments)} />
       </div>
 
-      {/* Account Overview */}
-      <div className="bg-white dark:bg-slate-900 p-6 lg:p-10 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-slate-800">
-        <div className="flex justify-between items-center mb-8">
-          <h3 className="text-sm lg:text-lg font-black text-slate-900 dark:text-white uppercase tracking-tighter flex items-center gap-2">
-            <Landmark size={20} className="text-blue-500" /> Account Overview
-          </h3>
-          <div className="flex gap-4">
-            <button onClick={() => onViewChange(View.Accounts)} className="text-[10px] font-black uppercase text-[#39FF14] flex items-center gap-1 hover:underline">
-              Banks & Cards <ChevronRight size={14} />
-            </button>
-            <button onClick={() => onViewChange(View.PaymentMethods)} className="text-[10px] font-black uppercase text-blue-500 flex items-center gap-1 hover:underline">
-              Wallets <ChevronRight size={14} />
-            </button>
-          </div>
+      {/* Account & Budget Snapshots */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
+        {/* Account Overview Section (Updated) */}
+        <div className="bg-white dark:bg-slate-900 p-8 lg:p-10 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-slate-800">
+           <div className="flex justify-between items-center mb-8">
+             <h3 className="text-sm lg:text-lg font-black uppercase tracking-tighter text-slate-900 dark:text-white flex items-center gap-2">
+               <Landmark size={20} className="text-blue-500" /> Account Overview
+             </h3>
+             <button onClick={() => onViewChange(View.Accounts)} className="text-[10px] font-black uppercase tracking-widest text-blue-600 hover:underline">Manage All</button>
+           </div>
+           
+           <div className="space-y-3">
+             {allAccounts.length === 0 ? (
+               <div className="py-10 text-center text-slate-400 text-xs font-black uppercase tracking-widest opacity-40">No accounts linked</div>
+             ) : (
+               allAccounts.map((acc, i) => (
+                 <div key={i} className="flex items-center justify-between p-4 bg-slate-50 dark:bg-slate-950 rounded-3xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors group border border-transparent dark:border-white/5">
+                    <div className="flex items-center gap-4 min-w-0">
+                      <div className="w-12 h-12 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl flex items-center justify-center text-slate-400 group-hover:text-blue-500 transition-colors shadow-sm">
+                         {acc.icon}
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-sm font-black text-slate-900 dark:text-white truncate uppercase tracking-tighter">{acc.nickname || acc.name}</p>
+                        <p className="text-[9px] text-slate-500 font-black uppercase tracking-widest">{(acc as any).typeLabel || 'ENTRY'}</p>
+                      </div>
+                    </div>
+                    <div className="text-right shrink-0">
+                       <p className={`text-sm font-black ${acc.balance >= 0 ? 'text-slate-900 dark:text-white' : 'text-rose-500'}`}>
+                         {formatCurrency(acc.balance)}
+                       </p>
+                    </div>
+                 </div>
+               ))
+             )}
+           </div>
         </div>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-10">
-          <div>
-            <p className="text-[9px] font-black uppercase text-slate-400 tracking-[0.2em] mb-6">Bank Accounts</p>
-            <div className="space-y-4">
-              {data.accounts.length > 0 ? data.accounts.map(acc => (
-                <div key={acc.id} className="flex justify-between items-center p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-transparent hover:border-white/5 transition-all">
-                  <div className="flex items-center gap-4">
-                    <div className="w-10 h-10 rounded-xl bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center text-blue-600 dark:text-blue-400">
-                      <Landmark size={20} />
-                    </div>
-                    <div>
-                      <p className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tighter truncate max-w-[120px]">{acc.nickname || acc.name}</p>
-                      <p className="text-[9px] text-slate-400 uppercase font-black tracking-widest truncate max-w-[120px]">{acc.name}</p>
-                    </div>
-                  </div>
-                  <p className="text-sm font-black text-slate-900 dark:text-white shrink-0">{formatCurrency(acc.balance)}</p>
-                </div>
-              )) : <p className="text-xs text-slate-400 italic">No bank accounts added.</p>}
-            </div>
+
+        {/* Budgets Overview */}
+        <div className="bg-white dark:bg-slate-900 p-8 lg:p-10 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-slate-800">
+          <div className="flex justify-between items-center mb-8">
+             <h3 className="text-sm lg:text-lg font-black uppercase tracking-tighter text-slate-900 dark:text-white flex items-center gap-2">
+               <Target size={20} className="text-amber-500" /> Monthly Budgets
+             </h3>
+             <button onClick={() => onViewChange(View.Budgeting)} className="text-[10px] font-black uppercase tracking-widest text-amber-600 hover:underline">View Details</button>
           </div>
-          <div>
-            <p className="text-[9px] font-black uppercase text-slate-400 tracking-[0.2em] mb-6">Active Credit Cards</p>
-            <div className="space-y-4">
-              {data.creditCards.length > 0 ? data.creditCards.map(card => {
-                const utilization = (card.outstanding / card.limit) * 100;
-                return (
-                  <div key={card.id} className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-transparent hover:border-white/5 transition-all space-y-3">
-                    <div className="flex justify-between items-center">
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-xl bg-rose-100 dark:bg-rose-900/30 flex items-center justify-center text-rose-600 dark:text-rose-400">
-                          <CreditCard size={20} />
-                        </div>
-                        <p className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tighter truncate max-w-[120px]">{card.nickname || card.name}</p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-sm font-black text-slate-900 dark:text-white">{formatCurrency(card.outstanding)}</p>
-                        <p className="text-[9px] text-slate-400 font-black uppercase tracking-widest">Limit: {formatCurrency(card.limit)}</p>
-                      </div>
-                    </div>
-                    <div className="h-1.5 bg-slate-200 dark:bg-slate-700/50 rounded-full overflow-hidden">
-                      <div className={`h-full transition-all duration-1000 ${utilization > 75 ? 'bg-rose-500' : utilization > 30 ? 'bg-amber-500' : 'bg-[#39FF14]'}`} style={{ width: `${Math.min(100, utilization)}%` }}></div>
-                    </div>
-                  </div>
-                );
-              }) : <p className="text-xs text-slate-400 italic">No credit cards added.</p>}
-            </div>
-          </div>
-          <div>
-            <p className="text-[9px] font-black uppercase text-slate-400 tracking-[0.2em] mb-6">Digital Wallets</p>
-            <div className="space-y-4">
-              {data.wallets.length > 0 ? data.wallets.map(wallet => (
-                <div key={wallet.id} className="flex justify-between items-center p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/40 border border-transparent hover:border-white/5 transition-all">
-                  <div className="flex items-center gap-4">
-                    <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${wallet.provider === 'upi' ? 'bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600' : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600'}`}>
-                      {wallet.provider === 'upi' ? <QrCode size={20} /> : <SmartphoneNfc size={20} />}
-                    </div>
+
+          <div className="space-y-6">
+            {budgetSummary.length === 0 ? (
+              <div className="py-10 text-center text-slate-400 text-xs font-black uppercase tracking-widest opacity-40">No budgets defined</div>
+            ) : (
+              budgetSummary.map((b, i) => (
+                <div key={i} className="space-y-2">
+                  <div className="flex justify-between items-end">
                     <div>
-                      <p className="text-sm font-black text-slate-900 dark:text-white uppercase tracking-tighter truncate max-w-[120px]">{wallet.nickname || wallet.name}</p>
-                      <p className="text-[9px] text-slate-400 uppercase font-black tracking-widest truncate max-w-[120px]">{wallet.name}</p>
+                      <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">{b.subCategory}</p>
+                      <p className="text-sm font-black text-slate-900 dark:text-white">{formatCurrency(b.spent)} <span className="text-[10px] text-slate-400 font-bold opacity-60">/ {formatCurrency(b.limit)}</span></p>
+                    </div>
+                    <div className={`flex items-center gap-1.5 px-2 py-0.5 rounded-lg text-[9px] font-black uppercase ${b.percentage > 100 ? 'bg-rose-500/10 text-rose-500' : b.percentage > 85 ? 'bg-amber-500/10 text-amber-500' : 'bg-emerald-500/10 text-emerald-500'}`}>
+                       {b.percentage > 100 && <AlertCircle size={10} />}
+                       {b.percentage.toFixed(0)}%
                     </div>
                   </div>
-                  <p className="text-sm font-black text-emerald-600 dark:text-[#39FF14] shrink-0">{formatCurrency(wallet.balance)}</p>
+                  <div className="h-2 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                    <div 
+                      className={`h-full rounded-full transition-all duration-1000 ${b.percentage > 100 ? 'bg-rose-500' : b.percentage > 85 ? 'bg-amber-500' : 'bg-[#39FF14]'}`}
+                      style={{ width: `${Math.min(100, b.percentage)}%` }}
+                    />
+                  </div>
                 </div>
-              )) : <p className="text-xs text-slate-400 italic">No wallets added.</p>}
-            </div>
+              ))
+            )}
           </div>
         </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8">
-        <div className="bg-white dark:bg-slate-900 p-6 lg:p-10 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-slate-800">
+        <div className="bg-white dark:bg-slate-900 p-8 lg:p-10 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-slate-800">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-10">
              <h3 className="text-sm lg:text-lg font-black uppercase tracking-tighter text-slate-900 dark:text-white flex items-center gap-2">
-               <PieIcon size={20} className="text-blue-500" /> Expense Mix
+               <PieIcon size={20} className="text-blue-500" /> Expense Breakdown
              </h3>
              <div className="flex bg-slate-100 dark:bg-slate-800/50 p-1.5 rounded-2xl">
                {(['today', 'week', 'month', 'quarter', 'year'] as PieTimeframe[]).map((tf) => (
-                 <button key={tf} onClick={() => setPieTimeframe(tf)} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${pieTimeframe === tf ? 'bg-white dark:bg-slate-700 text-[#39FF14] shadow-lg' : 'text-slate-500 dark:text-slate-500 hover:text-white'}`}>{tf === 'week' ? '7 Days' : tf === 'today' ? 'Today' : tf}</button>
+                 <button key={tf} onClick={() => setPieTimeframe(tf)} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${pieTimeframe === tf ? 'bg-white dark:bg-slate-700 text-[#39FF14] shadow-lg' : 'text-slate-500 dark:text-slate-500 hover:text-white'}`}>{tf === 'week' ? '7D' : tf === 'today' ? '1D' : tf.substring(0, 1).toUpperCase() + tf.substring(1, 2)}</button>
                ))}
              </div>
           </div>
@@ -300,10 +343,11 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onViewChange }) => {
             ) : <div className="flex flex-col items-center justify-center h-full text-slate-400 text-sm gap-2 opacity-30 font-black uppercase tracking-widest"><PieIcon size={48} /><p>No data found</p></div>}
           </div>
         </div>
-        <div className="bg-white dark:bg-slate-900 p-6 lg:p-10 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-slate-800">
+
+        <div className="bg-white dark:bg-slate-900 p-8 lg:p-10 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-slate-800">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-10">
             <h3 className="text-sm lg:text-lg font-black uppercase tracking-tighter text-slate-900 dark:text-white flex items-center gap-2">
-              <BarChart3 size={20} className="text-[#39FF14]" /> Cash Flow Trend
+              <BarChart3 size={20} className="text-[#39FF14]" /> Growth Trends
             </h3>
             <div className="flex bg-slate-100 dark:bg-slate-800/50 p-1.5 rounded-2xl">
                {( ['7d', '30d', 3, 6, 12] as BarTimeframe[]).map((tf) => (
@@ -315,7 +359,7 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onViewChange }) => {
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={barChartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#ffffff10" />
-                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 9, fontWeight: 900, fill: '#64748b', textTransform: 'uppercase' }} />
+                <XAxis dataKey="name" axisLine={false} tickLine={false} tick={{ fontSize: 9, fontWeight: 900, fill: '#64748b' }} />
                 <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 9, fontWeight: 900, fill: '#64748b' }} tickFormatter={(val) => `₹${val/1000}k`} />
                 <Tooltip cursor={{ fill: '#ffffff05' }} content={<CustomBarTooltip />} />
                 <Legend verticalAlign="bottom" height={36} iconType="rect" wrapperStyle={{ fontSize: '10px', fontWeight: 900, textTransform: 'uppercase', letterSpacing: '0.1em', paddingTop: '30px' }} />
@@ -331,11 +375,11 @@ const Dashboard: React.FC<DashboardProps> = ({ data, onViewChange }) => {
 };
 
 const StatCard = ({ title, value, icon, onClick }: { title: string; value: string; icon: React.ReactNode; onClick: () => void }) => (
-  <button onClick={onClick} className="w-full text-left bg-white dark:bg-slate-900 p-5 rounded-[2rem] shadow-sm border border-slate-100 dark:border-slate-800 flex items-center gap-4 transition-all hover:scale-[1.02] hover:border-[#39FF14]/20 active:scale-95 group">
-    <div className="w-12 h-12 bg-slate-50 dark:bg-slate-800/40 rounded-2xl flex items-center justify-center shrink-0 group-hover:bg-[#39FF14]/10 transition-colors">{icon}</div>
+  <button onClick={onClick} className="w-full text-left bg-white dark:bg-slate-900 p-6 rounded-[2.5rem] shadow-sm border border-slate-100 dark:border-slate-800 flex items-center gap-5 transition-all hover:scale-[1.03] hover:border-[#39FF14]/30 active:scale-95 group">
+    <div className="w-14 h-14 bg-slate-50 dark:bg-slate-800/60 rounded-2xl flex items-center justify-center shrink-0 group-hover:bg-[#39FF14]/10 transition-colors shadow-inner">{icon}</div>
     <div className="min-w-0">
-      <p className="text-slate-500 dark:text-slate-500 text-[10px] font-black uppercase tracking-widest truncate">{title}</p>
-      <h4 className="text-sm lg:text-lg font-black text-slate-900 dark:text-white tracking-tighter truncate">{value}</h4>
+      <p className="text-slate-500 dark:text-slate-500 text-[10px] font-black uppercase tracking-[0.2em] truncate mb-1">{title}</p>
+      <h4 className="text-base lg:text-xl font-black text-slate-900 dark:text-white tracking-tighter truncate">{value}</h4>
     </div>
   </button>
 );

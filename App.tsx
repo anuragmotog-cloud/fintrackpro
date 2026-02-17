@@ -183,6 +183,7 @@ const App: React.FC = () => {
       const updatedAccounts = [...prev.accounts];
       const updatedCards = [...prev.creditCards];
       const updatedWallets = [...prev.wallets];
+      const updatedLoans = [...prev.loans];
       
       if (t.type === 'income') {
         const accIdx = updatedAccounts.findIndex(a => a.id === t.sourceId);
@@ -207,21 +208,117 @@ const App: React.FC = () => {
         }
       }
 
+      // Sync with Loans if linked
+      if (t.loanId) {
+        const loanIdx = updatedLoans.findIndex(l => l.id === t.loanId);
+        if (loanIdx > -1) {
+          if (t.type === 'expense') {
+            updatedLoans[loanIdx].paidAmount = Math.min(updatedLoans[loanIdx].principal, updatedLoans[loanIdx].paidAmount + t.amount);
+          } else {
+            updatedLoans[loanIdx].paidAmount = Math.max(0, updatedLoans[loanIdx].paidAmount - t.amount);
+          }
+        }
+      }
+
       return {
         ...prev,
         transactions: [...prev.transactions, t],
         accounts: updatedAccounts,
         creditCards: updatedCards,
-        wallets: updatedWallets
+        wallets: updatedWallets,
+        loans: updatedLoans
       };
     });
   };
 
   const updateTransaction = (updatedTx: Transaction) => {
-    setData(prev => ({
-      ...prev,
-      transactions: prev.transactions.map(t => t.id === updatedTx.id ? updatedTx : t)
-    }));
+    setData(prev => {
+      const oldTx = prev.transactions.find(t => t.id === updatedTx.id);
+      if (!oldTx) return prev;
+
+      const updatedAccounts = [...prev.accounts];
+      const updatedCards = [...prev.creditCards];
+      const updatedWallets = [...prev.wallets];
+      const updatedLoans = [...prev.loans];
+
+      // 1. REVERT OLD TRANSACTION EFFECTS
+      if (oldTx.type === 'income') {
+        const idx = updatedAccounts.findIndex(a => a.id === oldTx.sourceId);
+        if (idx > -1) updatedAccounts[idx].balance -= oldTx.amount;
+        else {
+          const wIdx = updatedWallets.findIndex(w => w.id === oldTx.sourceId);
+          if (wIdx > -1) updatedWallets[wIdx].balance -= oldTx.amount;
+        }
+      } else {
+        const accIdx = updatedAccounts.findIndex(a => a.id === oldTx.sourceId);
+        if (accIdx > -1) {
+          updatedAccounts[accIdx].balance += oldTx.amount;
+        } else {
+          const cardIdx = updatedCards.findIndex(c => c.id === oldTx.sourceId);
+          if (cardIdx > -1) {
+            updatedCards[cardIdx].outstanding -= oldTx.amount;
+          } else {
+            const wIdx = updatedWallets.findIndex(w => w.id === oldTx.sourceId);
+            if (wIdx > -1) updatedWallets[wIdx].balance += oldTx.amount;
+          }
+        }
+      }
+
+      if (oldTx.loanId) {
+        const loanIdx = updatedLoans.findIndex(l => l.id === oldTx.loanId);
+        if (loanIdx > -1) {
+           if (oldTx.type === 'expense') {
+             updatedLoans[loanIdx].paidAmount = Math.max(0, updatedLoans[loanIdx].paidAmount - oldTx.amount);
+           } else {
+             updatedLoans[loanIdx].paidAmount = Math.min(updatedLoans[loanIdx].principal, updatedLoans[loanIdx].paidAmount + oldTx.amount);
+           }
+        }
+      }
+
+      // 2. APPLY NEW TRANSACTION EFFECTS
+      if (updatedTx.type === 'income') {
+        const accIdx = updatedAccounts.findIndex(a => a.id === updatedTx.sourceId);
+        if (accIdx > -1) {
+           updatedAccounts[accIdx].balance += updatedTx.amount;
+        } else {
+           const wIdx = updatedWallets.findIndex(w => w.id === updatedTx.sourceId);
+           if (wIdx > -1) updatedWallets[wIdx].balance += updatedTx.amount;
+        }
+      } else {
+        const accIdx = updatedAccounts.findIndex(a => a.id === updatedTx.sourceId);
+        if (accIdx > -1) {
+          updatedAccounts[accIdx].balance -= updatedTx.amount;
+        } else {
+          const cardIdx = updatedCards.findIndex(c => c.id === updatedTx.sourceId);
+          if (cardIdx > -1) {
+            updatedCards[cardIdx].outstanding += updatedTx.amount;
+          } else {
+            const wIdx = updatedWallets.findIndex(w => w.id === updatedTx.sourceId);
+            if (wIdx > -1) updatedWallets[wIdx].balance -= updatedTx.amount;
+          }
+        }
+      }
+
+      if (updatedTx.loanId) {
+        const loanIdx = updatedLoans.findIndex(l => l.id === updatedTx.loanId);
+        if (loanIdx > -1) {
+          if (updatedTx.type === 'expense') {
+            updatedLoans[loanIdx].paidAmount = Math.min(updatedLoans[loanIdx].principal, updatedLoans[loanIdx].paidAmount + updatedTx.amount);
+          } else {
+            updatedLoans[loanIdx].paidAmount = Math.max(0, updatedLoans[loanIdx].paidAmount - updatedTx.amount);
+          }
+        }
+      }
+
+      return {
+        ...prev,
+        transactions: prev.transactions.map(t => t.id === updatedTx.id ? updatedTx : t),
+        accounts: updatedAccounts,
+        creditCards: updatedCards,
+        wallets: updatedWallets,
+        loans: updatedLoans
+      };
+    });
   };
 
   const deleteTransaction = (id: string) => {
@@ -231,6 +328,7 @@ const App: React.FC = () => {
       const updatedAccounts = [...prev.accounts];
       const updatedCards = [...prev.creditCards];
       const updatedWallets = [...prev.wallets];
+      const updatedLoans = [...prev.loans];
 
       if (tx.type === 'income') {
         const idx = updatedAccounts.findIndex(a => a.id === tx.sourceId);
@@ -253,12 +351,26 @@ const App: React.FC = () => {
           }
         }
       }
+
+      // Revert loan payment if linked
+      if (tx.loanId) {
+        const loanIdx = updatedLoans.findIndex(l => l.id === tx.loanId);
+        if (loanIdx > -1) {
+           if (tx.type === 'expense') {
+             updatedLoans[loanIdx].paidAmount = Math.max(0, updatedLoans[loanIdx].paidAmount - tx.amount);
+           } else {
+             updatedLoans[loanIdx].paidAmount = Math.min(updatedLoans[loanIdx].principal, updatedLoans[loanIdx].paidAmount + tx.amount);
+           }
+        }
+      }
+
       return {
         ...prev,
         transactions: prev.transactions.filter(t => t.id !== id),
         accounts: updatedAccounts,
         creditCards: updatedCards,
-        wallets: updatedWallets
+        wallets: updatedWallets,
+        loans: updatedLoans
       };
     });
   };
@@ -359,8 +471,8 @@ const App: React.FC = () => {
   const renderContent = () => {
     switch (currentView) {
       case View.Dashboard: return <Dashboard data={data} onViewChange={setCurrentView} />;
-      case View.Income: return <IncomeTracker transactions={data.transactions} accounts={data.accounts} wallets={data.wallets} categories={data.metadata.incomeCategories} onAdd={addTransaction} onUpdate={updateTransaction} onDelete={deleteTransaction} onAddCategory={(c, s) => addCategory('income', c, s)} onUpdateCategory={(c, o, n) => updateCategory('income', c, o, n)} onDeleteCategory={(c, s) => deleteCategory('income', c, s)} />;
-      case View.Expenses: return <ExpenseTracker transactions={data.transactions} accounts={data.accounts} creditCards={data.creditCards} wallets={data.wallets} categories={data.metadata.expenseCategories} onAdd={addTransaction} onUpdate={updateTransaction} onDelete={deleteTransaction} onAddCategory={(c, s) => addCategory('expense', c, s)} onUpdateCategory={(c, o, n) => updateCategory('expense', c, o, n)} onDeleteCategory={(c, s) => deleteCategory('expense', c, s)} />;
+      case View.Income: return <IncomeTracker transactions={data.transactions} accounts={data.accounts} wallets={data.wallets} loans={data.loans} categories={data.metadata.incomeCategories} onAdd={addTransaction} onUpdate={updateTransaction} onDelete={deleteTransaction} onAddCategory={(c, s) => addCategory('income', c, s)} onUpdateCategory={(c, o, n) => updateCategory('income', c, o, n)} onDeleteCategory={(c, s) => deleteCategory('income', c, s)} />;
+      case View.Expenses: return <ExpenseTracker transactions={data.transactions} accounts={data.accounts} creditCards={data.creditCards} wallets={data.wallets} loans={data.loans} categories={data.metadata.expenseCategories} onAdd={addTransaction} onUpdate={updateTransaction} onDelete={deleteTransaction} onAddCategory={(c, s) => addCategory('expense', c, s)} onUpdateCategory={(c, o, n) => updateCategory('expense', c, o, n)} onDeleteCategory={(c, s) => deleteCategory('expense', c, s)} />;
       case View.PaymentMethods: return <WalletsManager wallets={data.wallets} onAdd={addWallet} onUpdate={updateWallet} onDelete={deleteWallet} />;
       case View.Budgeting: return <BudgetManager data={data} onSetBudget={setBudget} />;
       case View.Liabilities: return <LiabilitiesManager loans={data.loans} onAdd={addLoan} onDelete={deleteLoan} onUpdatePaid={updateLoanPaid} />;
